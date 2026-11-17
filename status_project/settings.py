@@ -29,6 +29,13 @@ DEBUG = True
 
 ALLOWED_HOSTS = ['*']
 
+CSRF_TRUSTED_ORIGINS = [
+    'https://*.vercel.app',
+    'https://status-nine-gray.vercel.app',
+    'http://127.0.0.1:8080',
+    'http://localhost:8080'
+]
+
 
 # Application definition
 
@@ -84,16 +91,19 @@ WSGI_APPLICATION = 'status_project.wsgi.application'
 if os.environ.get('VERCEL') or '/var/task' in str(BASE_DIR):
     tmp_db = Path('/tmp/db.sqlite3')
     source_db = BASE_DIR / 'db.sqlite3'
-    if not tmp_db.exists() and source_db.exists():
-        try:
-            import shutil
-            shutil.copyfile(source_db, tmp_db)
-            os.chmod(tmp_db, 0o666)
-        except Exception:
-            pass
+    try:
+        import shutil
+        if source_db.exists():
+            # If tmp_db does not exist or is older than repository db, copy over
+            if not tmp_db.exists() or (source_db.stat().st_mtime > tmp_db.stat().st_mtime):
+                shutil.copyfile(source_db, tmp_db)
+                os.chmod(tmp_db, 0o666)
+    except Exception:
+        pass
     db_path = tmp_db
 else:
     db_path = BASE_DIR / 'db.sqlite3'
+
 
 DATABASES = {
     'default': {
