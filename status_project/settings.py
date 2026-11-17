@@ -92,9 +92,19 @@ DATABASES = {
     'default': dj_database_url.config(
         default=DATABASE_URL,
         conn_max_age=600,
+        conn_health_checks=True,
         ssl_require=True
     )
 }
+
+# In-memory cache for fast session and view responses
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'statuspulse-cache',
+    }
+}
+
 
 
 
