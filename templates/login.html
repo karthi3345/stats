@@ -240,32 +240,6 @@
           <span>&rarr;</span>
         </button>
       </form>
-
-      <!-- 1-Click Demo Profiles (Only if demo users exist) -->
-      {% if demo_users %}
-        <div class="demo-login-divider">
-          <span>Or 1-Click Demo Sign-in</span>
-        </div>
-
-        <div class="demo-users-list">
-          {% for u in demo_users %}
-            <form action="{% url 'login' %}" method="POST">
-              {% csrf_token %}
-              <input type="hidden" name="demo_user_id" value="{{ u.id }}">
-              <button type="submit" class="demo-user-btn" style="width:100%;">
-                <div class="slack-avatar-square" style="width:32px;height:32px;font-size:12px;background:{{ u.profile.avatar_color }};">
-                  {{ u.profile.initials }}
-                </div>
-                <div class="demo-user-details">
-                  <span class="demo-user-name">{{ u.get_full_name|default:u.username }} (@{{ u.username }})</span>
-                  <span class="demo-user-role">{{ u.profile.role }}</span>
-                </div>
-                <span class="demo-login-arrow">Sign in &rarr;</span>
-              </button>
-            </form>
-          {% endfor %}
-        </div>
-      {% endif %}
     </div>
 
     <!-- Bottom Link -->
