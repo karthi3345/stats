@@ -83,34 +83,19 @@ TEMPLATES = [
 WSGI_APPLICATION = 'status_project.wsgi.application'
 
 
-# Database
-# https://docs.djangoproject.com/en/5.2/ref/settings/#databases
+import dj_database_url
 
-# On Vercel serverless functions, the root filesystem is read-only (/var/task).
-# Only /tmp is writable.
-if os.environ.get('VERCEL') or '/var/task' in str(BASE_DIR):
-    tmp_db = Path('/tmp/db.sqlite3')
-    source_db = BASE_DIR / 'db.sqlite3'
-    try:
-        import shutil
-        if source_db.exists():
-            # If tmp_db does not exist or is older than repository db, copy over
-            if not tmp_db.exists() or (source_db.stat().st_mtime > tmp_db.stat().st_mtime):
-                shutil.copyfile(source_db, tmp_db)
-                os.chmod(tmp_db, 0o666)
-    except Exception:
-        pass
-    db_path = tmp_db
-else:
-    db_path = BASE_DIR / 'db.sqlite3'
-
+NEON_DATABASE_URL = 'postgresql://neondb_owner:npg_aqOk6ubFe9zA@ep-cold-haze-za1bfzfx-pooler.c-2.eu-west-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require'
+DATABASE_URL = os.environ.get('DATABASE_URL', NEON_DATABASE_URL)
 
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': db_path,
-    }
+    'default': dj_database_url.config(
+        default=DATABASE_URL,
+        conn_max_age=600,
+        ssl_require=True
+    )
 }
+
 
 
 
