@@ -1,0 +1,175 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Create an Account | StatusPulse Slack</title>
+  <link rel="stylesheet" href="{% static 'css/slack_theme.css' %}">
+  <style>
+    body {
+      background: #FFFFFF;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 30px 20px;
+    }
+    .slack-auth-container {
+      width: 100%;
+      max-width: 440px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .auth-brand-header {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+    .auth-logo-badge {
+      width: 50px;
+      height: 50px;
+      background: #4A154B;
+      border-radius: 12px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 26px;
+      color: #FFFFFF;
+      margin-bottom: 12px;
+    }
+    .auth-brand-header h1 {
+      font-size: 28px;
+      font-weight: 900;
+      color: #1D1C1D;
+      margin-bottom: 6px;
+    }
+    .auth-brand-header p {
+      font-size: 14.5px;
+      color: #616061;
+    }
+    .auth-card {
+      width: 100%;
+      background: #FFFFFF;
+      border: 1px solid #E8E8E8;
+      border-radius: 12px;
+      padding: 26px;
+      box-shadow: 0 4px 18px rgba(0, 0, 0, 0.05);
+      margin-bottom: 20px;
+    }
+    .auth-form-group {
+      margin-bottom: 14px;
+    }
+    .auth-form-group label {
+      display: block;
+      font-size: 13px;
+      font-weight: 800;
+      margin-bottom: 5px;
+      color: #1D1C1D;
+    }
+    .auth-input {
+      width: 100%;
+      height: 40px;
+      padding: 0 12px;
+      border: 1.5px solid #BBBBBB;
+      border-radius: 6px;
+      font-size: 14px;
+      font-family: inherit;
+      transition: all 0.15s ease;
+    }
+    .auth-input:focus {
+      outline: none;
+      border-color: #1264A3;
+      box-shadow: 0 0 0 3px rgba(18, 100, 163, 0.15);
+    }
+    .auth-submit-btn {
+      width: 100%;
+      height: 42px;
+      background: #007A5A;
+      color: #FFFFFF;
+      border: none;
+      border-radius: 6px;
+      font-size: 15px;
+      font-weight: 800;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      margin-top: 14px;
+    }
+    .auth-submit-btn:hover {
+      background: #148567;
+    }
+    .auth-footer-links {
+      text-align: center;
+      font-size: 13.5px;
+      color: #616061;
+    }
+    .auth-footer-links a {
+      color: #1264A3;
+      font-weight: 700;
+      text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+
+  {% if messages %}
+    <div class="django-messages-toast">
+      {% for msg in messages %}
+        <div class="toast-msg toast-{{ msg.tags }}">{{ msg }}</div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <div class="slack-auth-container">
+    <div class="auth-brand-header">
+      <div class="auth-logo-badge">⚡</div>
+      <h1>Create your account</h1>
+      <p>Join the StatusPulse workspace to chat with your team and share daily progress updates.</p>
+    </div>
+
+    <div class="auth-card">
+      <form action="{% url 'register' %}" method="POST">
+        {% csrf_token %}
+        <div class="auth-form-group">
+          <label for="full_name">Full Name</label>
+          <input type="text" id="full_name" name="full_name" class="auth-input" placeholder="e.g. John Doe" required autofocus>
+        </div>
+
+        <div class="auth-form-group">
+          <label for="username">Username</label>
+          <input type="text" id="username" name="username" class="auth-input" placeholder="e.g. johndoe (used for @mentions)" required>
+        </div>
+
+        <div class="auth-form-group">
+          <label for="email">Work Email</label>
+          <input type="email" id="email" name="email" class="auth-input" placeholder="name@company.com" required>
+        </div>
+
+        <div class="auth-form-group">
+          <label for="role">Role / Job Title</label>
+          <input type="text" id="role" name="role" class="auth-input" placeholder="e.g. Frontend Developer, QA Engineer" required>
+        </div>
+
+        <div class="auth-form-group">
+          <label for="password">Password</label>
+          <input type="password" id="password" name="password" class="auth-input" placeholder="Create a secure password" required>
+        </div>
+
+        <button type="submit" class="auth-submit-btn">
+          <span>Create Account & Join</span>
+          <span>&rarr;</span>
+        </button>
+      </form>
+    </div>
+
+    <div class="auth-footer-links">
+      Already have an account? <a href="{% url 'login' %}">Sign in</a>
+    </div>
+  </div>
+
+</body>
+</html>

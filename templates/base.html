@@ -1,0 +1,521 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Slack | Daily Status Reports{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'css/slack_theme.css' %}?v=2.1">
+  <link rel="icon" href="https://a.slack-edge.com/80588/marketing/img/meta/favicon-32.png" type="image/png">
+</head>
+<body>
+
+  <!-- Flash Messages Toast -->
+  {% if messages %}
+    <div class="django-messages-toast">
+      {% for msg in messages %}
+        <div class="toast-msg toast-{{ msg.tags }}">{{ msg }}</div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <div class="slack-desktop-frame">
+
+    <!-- 1. Global Slack Top Bar -->
+    <header class="slack-global-topbar">
+      <div class="topbar-nav-controls">
+        <button class="topbar-icon-btn" title="Back" onclick="history.back()">&#8592;</button>
+        <button class="topbar-icon-btn" title="Forward" onclick="history.forward()">&#8594;</button>
+        <button class="topbar-icon-btn" title="History">🕒</button>
+      </div>
+
+      <div class="global-search-container">
+        <div class="global-search-box" onclick="document.getElementById('quick-search-modal').classList.add('open')">
+          <span>🔍</span>
+          <input type="text" placeholder="Search StatusPulse Workspace, reports, projects... (Ctrl + K)" readonly>
+        </div>
+      </div>
+
+      <div class="topbar-right-actions">
+        <a href="{% url 'logout' %}" class="topbar-icon-btn" style="text-decoration:none;font-size:12px;gap:4px;" title="Sign out of StatusPulse">
+          <span>🚪</span>
+          <span>Sign Out</span>
+        </a>
+        <div class="quick-user-badge">
+          <div class="slack-avatar-square" style="width:20px;height:20px;font-size:9px;background:{{ current_user.profile.avatar_color|default:'#4A154B' }};">
+            {{ current_user.profile.initials|default:'U' }}
+          </div>
+          <span>{{ current_user.first_name|default:current_user.username }}</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- 2. Main Workspace Body -->
+    <div class="slack-workspace-body">
+
+      <!-- A. Left Workspace Activity Rail (68px) -->
+      <nav class="slack-rail">
+        <div class="rail-workspace-icon" title="StatusPulse Workspace">
+          <span>⚡</span>
+        </div>
+
+        <a href="{% url 'dashboard' %}" class="rail-tab-btn {% if request.resolver_match.url_name == 'dashboard' or request.resolver_match.url_name == 'project_detail' %}active{% endif %}" title="Home & Channels">
+          <span class="rail-icon">🏠</span>
+          <span>Home</span>
+        </a>
+
+        <a href="{% url 'all_reports' %}?tagged_me=1" class="rail-tab-btn {% if tagged_me %}active{% endif %}" title="Activity & Mentions">
+          <span class="rail-icon">🔔</span>
+          <span>Activity</span>
+          {% if my_mentions_count > 0 %}
+            <span class="rail-badge">{{ my_mentions_count }}</span>
+          {% endif %}
+        </a>
+
+        <a href="{% url 'all_reports' %}" class="rail-tab-btn {% if request.resolver_match.url_name == 'all_reports' and not tagged_me %}active{% endif %}" title="All Daily Reports Feed">
+          <span class="rail-icon">📊</span>
+          <span>DSR Feed</span>
+        </a>
+
+        <a href="{% url 'analytics_dashboard' %}" class="rail-tab-btn {% if request.resolver_match.url_name == 'analytics_dashboard' %}active{% endif %}" title="Analytics, Charts & Excel Export">
+          <span class="rail-icon">📈</span>
+          <span>Analytics</span>
+        </a>
+
+        <a href="#" class="rail-tab-btn" onclick="alert('Slack Canvases & Saved items feature.'); return false;" title="Saved items">
+          <span class="rail-icon">🔖</span>
+          <span>Later</span>
+        </a>
+
+        <a href="#" class="rail-tab-btn" onclick="alert('Workspace Settings & Integrations.'); return false;" title="More options">
+          <span class="rail-icon">⋯</span>
+          <span>More</span>
+        </a>
+
+        <div class="rail-spacer"></div>
+
+        <!-- Dark and Light / Night Mode Theme Toggle Button (Above user logo) -->
+        <button type="button" class="theme-toggle-rail-btn" id="theme-toggle-btn" onclick="toggleThemeMode()" title="Toggle Dark / Night & Light Mode">
+          <span id="theme-toggle-icon">🌙</span>
+        </button>
+
+        <!-- User Profile in Rail -->
+        <div class="rail-profile-avatar" id="rail-profile-trigger" style="cursor:pointer;" title="{{ current_user.get_full_name|default:current_user.username }} (@{{ current_user.username }}) - Click for Account Switcher">
+          <div class="slack-avatar-square" style="width:36px;height:36px;font-size:13px;border-radius:8px;background:{{ current_user.profile.avatar_color|default:'#4A154B' }};">
+            {{ current_user.profile.initials|default:'U' }}
+            <div class="online-dot" style="bottom:-2px;right:-2px;"></div>
+          </div>
+        </div>
+      </nav>
+
+      <!-- B. Channel & Projects Sidebar (240px Aubergine) -->
+      <aside class="slack-sidebar">
+        <!-- Sidebar Workspace Header -->
+        <div class="sidebar-header">
+          <div class="sidebar-workspace-name">
+            <span>StatusPulse HQ</span>
+            <span style="font-size:12px;opacity:0.8;">▾</span>
+          </div>
+          <button class="sidebar-new-msg-btn" data-open-modal="create-project-modal" title="Create New Project Channel">
+            ✏️
+          </button>
+        </div>
+
+        <div class="sidebar-scrollable">
+          <!-- Channels / Projects -->
+          <div class="sidebar-group">
+            <div class="sidebar-group-title">
+              <span>▾ Channels</span>
+              <button class="add-channel-btn" data-open-modal="create-project-modal" title="Add Channel / Project">+</button>
+            </div>
+            
+            {% for p in sidebar_projects %}
+              <a href="{% url 'project_detail' p.slug %}" class="channel-item {% if project and project.slug == p.slug %}active{% endif %}">
+                <span class="channel-hash-icon">#</span>
+                <span class="channel-item-name">{{ p.name }}</span>
+                {% if p.slug in active_huddle_slugs %}
+                  <span class="sidebar-huddle-badge" title="Active Huddle Meeting in Progress">🎧</span>
+                {% endif %}
+                {% if p.reports.count > 0 %}
+                  <span class="channel-unread-badge">{{ p.reports.count }}</span>
+                {% endif %}
+              </a>
+            {% empty %}
+              <div style="padding:4px 16px; font-size:12px; color:#A38DA0;">No channels yet</div>
+            {% endfor %}
+          </div>
+
+          <!-- Direct Messages / Team Members -->
+          <div class="sidebar-group">
+            <div class="sidebar-group-title">
+              <span>▾ Direct Messages</span>
+            </div>
+            {% for u in all_workspace_users %}
+              <a href="{% url 'direct_messages' u.username %}" class="channel-item {% if target_user.username == u.username %}active{% endif %}" title="{{ u.profile.role }}">
+                <div class="slack-avatar-square" style="width:18px;height:18px;font-size:8px;background:{{ u.profile.avatar_color }};">
+                  {{ u.profile.initials }}
+                  {% if u.profile.is_online %}
+                    <div class="online-dot" style="width:5px;height:5px;"></div>
+                  {% endif %}
+                </div>
+                <span class="channel-item-name">{{ u.get_full_name|default:u.username }}</span>
+                <span class="user-huddle-indicator user-huddle-user-{{ u.id }}" style="display:{% if u.id in active_huddle_user_ids %}inline-flex{% else %}none{% endif %}; font-size:12px; margin-left:3px; animation:huddlePulseBtn 1.8s infinite;" title="Currently in a Huddle">🎧</span>
+                {% if u == current_user %}
+                  <span style="font-size:10px;opacity:0.6;margin-left:auto;">you</span>
+                {% endif %}
+              </a>
+            {% endfor %}
+          </div>
+        </div>
+
+        <!-- Sidebar Footer with User Switcher & Profile Popover -->
+        <div class="sidebar-user-footer" id="sidebar-user-footer-container">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; padding:0 4px;">
+            <span style="font-size:11px; font-weight:800; color:rgba(255,255,255,0.6); text-transform:uppercase;">THEME</span>
+            <button type="button" onclick="toggleThemeMode()" class="slack-mini-btn" id="sidebar-theme-toggle-btn" style="color:#FFF; background:rgba(255,255,255,0.12); border-radius:12px; font-size:11.5px; padding:2px 8px; cursor:pointer;" title="Switch Dark / Night / Light mode">
+              <span id="sidebar-theme-icon">🌙 Dark</span>
+            </button>
+          </div>
+          <div class="user-status-pill" id="user-profile-trigger" role="button" tabindex="0" title="Account settings & user switcher">
+            <div class="slack-avatar-square" style="background:{{ current_user.profile.avatar_color|default:'#4A154B' }};">
+              {{ current_user.profile.initials|default:'U' }}
+              <div class="online-dot"></div>
+            </div>
+            <div class="user-names-col">
+              <div style="display:flex; align-items:center; gap:5px;">
+                <span class="user-name-text">{{ current_user.get_full_name|default:current_user.username }}</span>
+                <span id="footer-user-huddle-badge" style="display:{% if current_user.id in active_huddle_user_ids %}inline-flex{% else %}none{% endif %}; font-size:11px; background:#007A5A; color:#FFF; padding:1px 5px; border-radius:10px; font-weight:800; animation:huddlePulseBtn 1.8s infinite;" title="In a Huddle">🎧 In Huddle</span>
+              </div>
+              <span class="user-role-text">@{{ current_user.username }}</span>
+            </div>
+            <span class="user-menu-chevron">▾</span>
+          </div>
+        </div>
+      </aside>
+
+      <!-- C. Main Pane (Channels / Feed) -->
+      <main class="slack-main-pane">
+        {% block content %}{% endblock %}
+      </main>
+
+    </div>
+  </div>
+
+  <!-- Interactive Profile / User Switcher Popover Menu (Placed at Root Body Level) -->
+  <div class="user-popover-menu" id="user-popover-menu">
+    <div class="user-popover-header">
+      <div class="slack-avatar-square" style="width:40px;height:40px;font-size:15px;background:{{ current_user.profile.avatar_color|default:'#4A154B' }};border-radius:8px;">
+        {{ current_user.profile.initials|default:'U' }}
+      </div>
+      <div class="user-popover-info">
+        <div class="user-popover-fullname">{{ current_user.get_full_name|default:current_user.username }}</div>
+        <div class="user-popover-meta">
+          <span class="online-indicator-dot"></span> Active &bull; @{{ current_user.username }}
+        </div>
+      </div>
+    </div>
+
+    <div class="user-popover-divider"></div>
+
+    <div class="user-popover-section-label">SWITCH ACCOUNT</div>
+    <div class="user-popover-list">
+      {% for u in all_workspace_users %}
+        <a href="{% url 'switch_user' u.id %}" class="user-popover-item {% if u.id == current_user.id %}active-account{% endif %}">
+          <div class="slack-avatar-square" style="width:28px;height:28px;font-size:11px;background:{{ u.profile.avatar_color|default:'#1264A3' }};border-radius:6px;">
+            {{ u.profile.initials|default:u.username|slice:":2"|upper }}
+          </div>
+          <div class="user-popover-item-details">
+            <span class="user-popover-item-name">{{ u.get_full_name|default:u.username }}</span>
+            <span class="user-popover-item-role">@{{ u.username }}{% if u.profile.role %} &bull; {{ u.profile.role }}{% endif %}</span>
+          </div>
+          {% if u.id == current_user.id %}
+            <span class="active-check-icon">✓</span>
+          {% endif %}
+        </a>
+      {% empty %}
+        <div class="user-popover-empty">No other accounts in workspace</div>
+      {% endfor %}
+    </div>
+
+    <div class="user-popover-divider"></div>
+
+    <a href="{% url 'register' %}" class="user-popover-action-link">
+      <span>➕ Add or Register Member</span>
+    </a>
+    <a href="{% url 'logout' %}" class="user-popover-action-link signout-link">
+      <span>Sign out of StatusPulse</span>
+    </a>
+  </div>
+
+  <!-- Real-time Slack Huddle Overlay & Docked Floating Bar -->
+  <div id="huddle-floating-bar" class="huddle-floating-bar" style="display:none;">
+    <div class="huddle-bar-content">
+      <div class="huddle-live-indicator">
+        <span class="huddle-pulse-ring"></span>
+        <span class="huddle-icon">🎧</span>
+      </div>
+      <div class="huddle-bar-details">
+        <div class="huddle-bar-title" id="huddle-bar-title">Huddle &bull; #volgo-announcement</div>
+        <div class="huddle-bar-meta">
+          <span id="huddle-timer">00:00</span> &bull; 
+          <span id="huddle-participant-count">1 person</span>
+        </div>
+      </div>
+      
+      <!-- Mini avatar avatars in huddle -->
+      <div class="huddle-avatar-cluster" id="huddle-avatar-cluster"></div>
+
+      <!-- Controls -->
+      <div class="huddle-controls">
+        <button id="huddle-btn-mic" class="huddle-ctrl-btn" title="Toggle Microphone">
+          <span class="ctrl-icon">🎙️</span>
+          <span class="ctrl-label">Mute</span>
+        </button>
+        <button id="huddle-btn-camera" class="huddle-ctrl-btn" title="Toggle Camera">
+          <span class="ctrl-icon">📹</span>
+          <span class="ctrl-label">Video</span>
+        </button>
+        <button id="huddle-btn-screen" class="huddle-ctrl-btn" title="Share Screen">
+          <span class="ctrl-icon">🖥️</span>
+          <span class="ctrl-label">Share</span>
+        </button>
+        <button id="huddle-btn-expand" class="huddle-ctrl-btn" title="Expand Meeting Stage">
+          <span class="ctrl-icon">⤢</span>
+          <span class="ctrl-label">Stage</span>
+        </button>
+        <button id="huddle-btn-leave" class="huddle-ctrl-btn huddle-leave-btn" title="Leave Huddle">
+          <span class="ctrl-icon">📞</span>
+          <span class="ctrl-label">Leave</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Fullscreen / Expanded Huddle Meeting Stage Modal -->
+  <div id="huddle-stage-modal" class="modal-overlay huddle-modal-overlay" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.8); backdrop-filter:blur(6px); z-index:999999; align-items:center; justify-content:center;">
+    <div class="huddle-stage-window" style="background:#1A1D21; width:92vw; max-width:1040px; height:84vh; border-radius:16px; border:1px solid rgba(255,255,255,0.15); box-shadow:0 24px 60px rgba(0,0,0,0.7); display:flex; flex-direction:column; overflow:hidden;">
+      <div class="huddle-stage-header" style="padding:16px 24px; border-bottom:1px solid rgba(255,255,255,0.1); display:flex; align-items:center; justify-content:space-between; background:#111315;">
+        <div class="huddle-stage-title-wrap" style="display:flex; align-items:center; gap:12px;">
+          <span class="huddle-live-tag" style="background:#007A5A; color:#FFF; font-size:10px; font-weight:800; letter-spacing:0.8px; padding:3px 8px; border-radius:4px; display:inline-flex; align-items:center; gap:4px;">
+            <span style="width:6px;height:6px;border-radius:50%;background:#FFF;animation:pulseRingAnim 1.4s infinite;"></span>
+            LIVE HUDDLE
+          </span>
+          <h2 id="huddle-stage-channel-name" style="font-size:17px; font-weight:800; color:#FFFFFF; margin:0;">#volgo-announcement Meeting</h2>
+          <span class="huddle-stage-timer" id="huddle-stage-timer" style="font-size:13px; color:rgba(255,255,255,0.85); background:rgba(255,255,255,0.12); padding:3px 10px; border-radius:12px; font-weight:700;">00:00</span>
+        </div>
+        <div class="huddle-stage-actions" style="display:flex; align-items:center; gap:10px;">
+          <button id="huddle-btn-minimize" class="slack-btn slack-btn-outline slack-btn-sm" style="background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.2); color:#FFFFFF; border-radius:6px; padding:6px 12px; cursor:pointer;">
+            <span>⤡ Minimize to Dock</span>
+          </button>
+          <button id="huddle-btn-stage-leave" class="slack-btn slack-btn-danger slack-btn-sm" style="background:#E01E5A; color:#FFFFFF; border:none; border-radius:6px; padding:6px 14px; font-weight:700; cursor:pointer;">
+            <span>📞 Leave Huddle</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Video / Participant Grid -->
+      <div class="huddle-video-grid" id="huddle-video-grid" style="flex:1; padding:24px; display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:20px; overflow-y:auto; align-content:center; background:#1A1D21;">
+        <!-- Self Video Card -->
+        <div class="huddle-video-card self-card" id="huddle-self-card" style="background:#222529; border:1px solid rgba(255,255,255,0.12); border-radius:12px; overflow:hidden; display:flex; flex-direction:column; min-height:260px; box-shadow:0 8px 24px rgba(0,0,0,0.4);">
+          <div class="huddle-video-viewfinder" style="flex:1; display:flex; align-items:center; justify-content:center; position:relative; background:#111315; min-height:200px;">
+            <video id="huddle-local-video" autoplay playsinline muted style="display:none; width:100%; height:100%; object-fit:cover; transform:scaleX(-1);"></video>
+            <div class="huddle-video-placeholder" id="huddle-local-placeholder" style="display:flex; align-items:center; justify-content:center; width:100%; height:100%;">
+              <div class="slack-avatar-square" id="huddle-self-avatar" style="width:80px;height:80px;font-size:28px;background:{{ current_user.profile.avatar_color|default:'#4A154B' }};border-radius:16px;box-shadow:0 8px 20px rgba(0,0,0,0.5);">
+                {{ current_user.profile.initials|default:'U' }}
+              </div>
+            </div>
+            <div class="huddle-card-badges" style="position:absolute; top:12px; left:12px; display:flex; gap:6px;">
+              <span class="huddle-status-pill-badge" id="huddle-self-mic-badge" style="background:rgba(0,0,0,0.7); backdrop-filter:blur(4px); color:#FFF; font-size:11px; font-weight:700; padding:4px 10px; border-radius:12px; border:1px solid rgba(255,255,255,0.15);">🎙️ Active</span>
+            </div>
+          </div>
+          <div class="huddle-card-footer" style="padding:12px 16px; background:#16181B; display:flex; align-items:center; justify-content:space-between; border-top:1px solid rgba(255,255,255,0.06);">
+            <div style="display:flex; align-items:center; gap:6px;">
+              <span class="huddle-card-username" style="font-size:13.5px; font-weight:800; color:#FFFFFF;">{{ current_user.get_full_name|default:current_user.username }} (You)</span>
+              <span style="font-size:11px; color:#2BAC76;">🎧 In Huddle</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Stage Bottom Action Bar -->
+      <div class="huddle-stage-bottom-bar" style="padding:16px 24px; background:#111315; border-top:1px solid rgba(255,255,255,0.1); display:flex; align-items:center; justify-content:center;">
+        <div class="huddle-stage-controls" style="display:flex; align-items:center; gap:14px;">
+          <button id="stage-btn-mic" class="huddle-stage-ctrl" style="background:rgba(255,255,255,0.12); border:1px solid rgba(255,255,255,0.1); border-radius:12px; padding:10px 20px; color:#FFFFFF; font-size:13px; font-weight:700; display:flex; align-items:center; gap:8px; cursor:pointer;" title="Toggle Microphone">
+            <span class="huddle-ctrl-icon" style="font-size:16px;">🎙️</span>
+            <span class="huddle-ctrl-text">Mute</span>
+          </button>
+          <button id="stage-btn-cam" class="huddle-stage-ctrl" style="background:rgba(255,255,255,0.12); border:1px solid rgba(255,255,255,0.1); border-radius:12px; padding:10px 20px; color:#FFFFFF; font-size:13px; font-weight:700; display:flex; align-items:center; gap:8px; cursor:pointer;" title="Toggle Camera">
+            <span class="huddle-ctrl-icon" style="font-size:16px;">📹</span>
+            <span class="huddle-ctrl-text">Camera</span>
+          </button>
+          <button id="stage-btn-screen" class="huddle-stage-ctrl" style="background:rgba(255,255,255,0.12); border:1px solid rgba(255,255,255,0.1); border-radius:12px; padding:10px 20px; color:#FFFFFF; font-size:13px; font-weight:700; display:flex; align-items:center; gap:8px; cursor:pointer;" title="Share Screen">
+            <span class="huddle-ctrl-icon" style="font-size:16px;">🖥️</span>
+            <span class="huddle-ctrl-text">Share Screen</span>
+          </button>
+          <button id="stage-btn-notes" class="huddle-stage-ctrl" onclick="alert('Meeting notes are synchronized with channel messages!');" style="background:rgba(255,255,255,0.12); border:1px solid rgba(255,255,255,0.1); border-radius:12px; padding:10px 20px; color:#FFFFFF; font-size:13px; font-weight:700; display:flex; align-items:center; gap:8px; cursor:pointer;" title="Take Huddle Notes">
+            <span class="huddle-ctrl-icon" style="font-size:16px;">📝</span>
+            <span class="huddle-ctrl-text">Notes</span>
+          </button>
+          <button id="stage-btn-leave" class="huddle-stage-ctrl stage-ctrl-danger" style="background:#E01E5A !important; border:none; border-radius:12px; padding:10px 22px; color:#FFFFFF; font-size:13px; font-weight:700; display:flex; align-items:center; gap:8px; cursor:pointer;" title="Leave Huddle">
+            <span class="huddle-ctrl-icon" style="font-size:16px;">📞</span>
+            <span class="huddle-ctrl-text">Leave</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Create Channel / Project -->
+  <div id="create-project-modal" class="modal-overlay">
+    <div class="slack-modal-card">
+      <div class="slack-modal-header">
+        <h2>Create a channel</h2>
+        <button class="modal-close-icon" data-close-modal>&times;</button>
+      </div>
+      <form action="{% url 'create_project' %}" method="POST">
+        {% csrf_token %}
+        <div class="slack-modal-body">
+          <p style="font-size:13.5px; color:#616061; margin-bottom:16px;">
+            Channels are where your team communicates and shares daily reports. They’re best when organized around a project or topic.
+          </p>
+
+          <div style="margin-bottom:16px;">
+            <label style="display:block; font-size:13px; font-weight:800; margin-bottom:6px;">Name</label>
+            <div style="position:relative; display:flex; align-items:center;">
+              <span style="position:absolute; left:10px; font-weight:700; color:#888;">#</span>
+              <input type="text" name="name" class="slack-input" style="padding-left:26px;" placeholder="e.g. mobile-app, payments, infra" required>
+            </div>
+          </div>
+
+          <div style="margin-bottom:16px;">
+            <label style="display:block; font-size:13px; font-weight:800; margin-bottom:6px;">Description <span style="font-weight:400; color:#888;">(optional)</span></label>
+            <textarea name="description" class="slack-textarea" rows="2" placeholder="What’s this channel about?"></textarea>
+          </div>
+
+          <div>
+            <label style="display:block; font-size:13px; font-weight:800; margin-bottom:6px;">Add People to Channel</label>
+            <div class="member-selection-list" style="max-height:180px;">
+              {% for u in all_workspace_users %}
+                <label class="member-selection-item">
+                  <input type="checkbox" name="members" value="{{ u.id }}" {% if u == current_user %}checked{% endif %}>
+                  <div class="slack-avatar-square" style="width:22px;height:22px;font-size:10px;background:{{ u.profile.avatar_color }};">
+                    {{ u.profile.initials }}
+                  </div>
+                  <div>
+                    <strong style="font-size:13px;">{{ u.get_full_name|default:u.username }}</strong>
+                    <span style="font-size:11px;color:#777;margin-left:4px;">@{{ u.username }}</span>
+                  </div>
+                </label>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+        <div class="slack-modal-footer">
+          <button type="button" class="slack-btn slack-btn-outline" data-close-modal>Cancel</button>
+          <button type="submit" class="slack-btn slack-btn-primary">Create</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Quick Search (Ctrl+K) -->
+  <div id="quick-search-modal" class="modal-overlay">
+    <div class="slack-modal-card" style="max-width:540px;">
+      <div style="padding:16px; border-bottom:1px solid #E8E8E8; display:flex; align-items:center; gap:10px;">
+        <span style="font-size:18px;">🔍</span>
+        <input type="text" id="quick-jump-input" class="slack-input" placeholder="Search channels, people, daily updates..." style="border:none;font-size:15px;padding:0;" autofocus>
+        <button class="modal-close-icon" data-close-modal>&times;</button>
+      </div>
+      <div style="padding:14px; max-height:300px; overflow-y:auto;">
+        <div style="font-size:12px; font-weight:800; color:#888; text-transform:uppercase; margin-bottom:8px;">Channels</div>
+        {% for p in sidebar_projects %}
+          <a href="{% url 'project_detail' p.slug %}" class="channel-item" style="color:#1D1C1D; border-radius:4px;">
+            <span class="channel-hash-icon">#</span>
+            <span>{{ p.name }}</span>
+          </a>
+        {% endfor %}
+      </div>
+    </div>
+  <!-- Modal: Forward Message to Channel or DM -->
+  <div id="forward-message-modal" class="modal-overlay" style="display:none; z-index:999999;">
+    <div class="slack-modal-card" style="max-width:480px; background:#1A1D21; color:#D1D2D3; border:1px solid #383A40; border-radius:10px; box-shadow:0 12px 36px rgba(0,0,0,0.6);">
+      <div class="slack-modal-header" style="border-bottom:1px solid #2B2D31; padding:14px 20px; display:flex; justify-content:space-between; align-items:center;">
+        <h3 style="margin:0; font-size:16px; font-weight:800; color:#FFF; display:flex; align-items:center; gap:8px;">
+          <span>↪️</span> <span>Forward message</span>
+        </h3>
+        <button type="button" class="modal-close-icon" onclick="closeForwardModal()" style="background:transparent; border:none; color:#9BA1A6; font-size:20px; cursor:pointer;">&times;</button>
+      </div>
+
+      <form action="{% url 'forward_message' %}" method="POST" id="forward-message-form">
+        {% csrf_token %}
+        <input type="hidden" name="content" id="forward-input-content" value="">
+
+        <div class="slack-modal-body" style="padding:18px 20px;">
+          <!-- Preview Box of message being forwarded -->
+          <div style="font-size:11px; font-weight:800; color:#9BA1A6; margin-bottom:6px; text-transform:uppercase;">Message to forward:</div>
+          <div id="forward-preview-box" style="background:#111315; border:1px solid #2B2D31; border-left:3px solid #1264A3; border-radius:6px; padding:10px 14px; font-size:13px; color:#D1D2D3; max-height:120px; overflow-y:auto; line-height:1.45; margin-bottom:16px; white-space:pre-wrap;">
+          </div>
+
+          <!-- Share with Destination Selector -->
+          <div style="margin-bottom:16px;">
+            <label style="display:block; font-size:12.5px; font-weight:800; color:#D1D2D3; margin-bottom:6px;">Share with</label>
+            <div style="display:flex; gap:10px; margin-bottom:10px;">
+              <label style="display:flex; align-items:center; gap:6px; font-size:13px; cursor:pointer;">
+                <input type="radio" name="dest_type" value="channel" checked onchange="toggleForwardDest(this.value)">
+                <span># Channel</span>
+              </label>
+              <label style="display:flex; align-items:center; gap:6px; font-size:13px; cursor:pointer;">
+                <input type="radio" name="dest_type" value="dm" onchange="toggleForwardDest(this.value)">
+                <span>👤 Direct Message</span>
+              </label>
+            </div>
+
+            <!-- Channel Select -->
+            <div id="forward-channel-group">
+              <select name="dest_id" id="forward-channel-select" class="slack-input" style="width:100%; background:#222529; color:#FFF; border:1px solid #383A40; border-radius:6px; padding:8px 12px; font-size:13.5px;">
+                {% for p in sidebar_projects %}
+                  <option value="{{ p.slug }}"># {{ p.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <!-- Direct Message User Select (hidden initially) -->
+            <div id="forward-dm-group" style="display:none;">
+              <select name="dest_id_dm" id="forward-dm-select" class="slack-input" style="width:100%; background:#222529; color:#FFF; border:1px solid #383A40; border-radius:6px; padding:8px 12px; font-size:13.5px;" disabled>
+                {% for u in all_workspace_users %}
+                  {% if u != current_user %}
+                    <option value="{{ u.username }}">{{ u.get_full_name|default:u.username }} (@{{ u.username }})</option>
+                  {% endif %}
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="slack-modal-footer" style="padding:12px 20px; border-top:1px solid #2B2D31; background:#1E2226; display:flex; justify-content:flex-end; gap:8px;">
+          <button type="button" class="slack-btn" onclick="closeForwardModal()" style="background:transparent; border:1px solid #383A40; color:#D1D2D3; padding:6px 14px; border-radius:4px; font-size:13px; cursor:pointer;">Cancel</button>
+          <button type="submit" class="slack-btn" style="background:#007A5A; border:none; color:#FFF; padding:6px 18px; border-radius:4px; font-size:13px; font-weight:700; cursor:pointer;">Forward</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Workspace Users Data for @mentions AutoComplete -->
+  <script id="workspace-users-json" type="application/json">
+    [
+      {% for u in all_workspace_users %}
+        {
+          "id": {{ u.id }},
+          "username": "{{ u.username|escapejs }}",
+          "name": "{{ u.get_full_name|default:u.username|escapejs }}",
+          "role": "{{ u.profile.role|escapejs }}",
+          "color": "{{ u.profile.avatar_color|default:'#1264A3'|escapejs }}",
+          "initials": "{{ u.profile.initials|escapejs }}"
+        }{% if not forloop.last %},{% endif %}
+      {% endfor %}
+    ]
+  </script>
+
+  <script src="{% static 'js/slack_app.js' %}?v=2.1"></script>
+</body>
+</html>

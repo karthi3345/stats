@@ -1,0 +1,488 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ target_user.get_full_name|default:target_user.username }} | Direct Message{% endblock %}
+
+{% block content %}
+<!-- Slack DM Top Header (No canvas, no files tabs) -->
+<header class="channel-top-header" style="background:#1A1D21; border-bottom:1px solid #2B2D31; color:#D1D2D3; padding:10px 20px; display:flex; align-items:center; justify-content:space-between;">
+  <div class="channel-title-meta" style="display:flex; align-items:center; gap:10px;">
+    <div class="slack-avatar-square" style="width:32px; height:32px; font-size:12px; border-radius:6px; background:{{ target_user.profile.avatar_color|default:'#1264A3' }};">
+      {{ target_user.profile.initials|default:'U' }}
+      {% if target_user.profile.is_online %}
+        <div class="online-dot" style="width:7px; height:7px;"></div>
+      {% endif %}
+    </div>
+    <div>
+      <div style="font-size:15px; font-weight:800; color:#FFFFFF; display:flex; align-items:center; gap:6px;">
+        <span>{{ target_user.get_full_name|default:target_user.username }}</span>
+        {% if is_self_dm %}<span style="font-size:11px; background:#2C3136; color:#9BA1A6; padding:1px 6px; border-radius:4px;">you</span>{% endif %}
+        <span class="user-huddle-indicator user-huddle-user-{{ target_user.id }}" style="display:{% if target_user.id in active_huddle_user_ids %}inline-flex{% else %}none{% endif %}; font-size:13px; animation:huddlePulseBtn 1.8s infinite;" title="In a Huddle">🎧</span>
+      </div>
+      <div style="font-size:12px; color:#9BA1A6; display:flex; align-items:center; gap:6px;">
+        <span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:#2BAC76;"></span>
+        <span>Active &bull; {{ target_user.profile.role|default:'Team Member' }}</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="header-action-group" style="display:flex; align-items:center; gap:10px;">
+    {% if sidebar_projects %}
+      <button class="slack-btn slack-huddle-toggle-btn slack-btn-sm" onclick="toggleChannelHuddle('{{ sidebar_projects.0.slug }}')" style="font-size:12px; background:#222529; border:1px solid #383A40; color:#FFF; display:flex; align-items:center; gap:6px; padding:5px 12px; border-radius:6px;">
+        <span>🎧</span>
+        <span>Huddle</span>
+      </button>
+    {% endif %}
+  </div>
+</header>
+
+<!-- DM Chat Viewport (Dark slack theme matching user screenshot) -->
+<div id="dm-viewport-container" style="display:flex; flex-direction:column; flex:1; height:calc(100vh - 120px); background:#1A1D21; color:#D1D2D3; overflow:hidden;">
+
+  <!-- Messages Scroll Area -->
+  <div id="dm-messages-stream" style="flex:1; overflow-y:auto; padding:20px 24px; display:flex; flex-direction:column; gap:16px;">
+
+    <!-- User Header Intro Card -->
+    <div style="margin-bottom:20px; padding:16px 0; border-bottom:1px solid #2B2D31;">
+      <div class="slack-avatar-square" style="width:64px; height:64px; font-size:24px; border-radius:12px; background:{{ target_user.profile.avatar_color|default:'#1264A3' }}; margin-bottom:12px;">
+        {{ target_user.profile.initials|default:'U' }}
+      </div>
+      <h2 style="font-size:20px; font-weight:800; color:#FFF; margin:0 0 4px 0;">
+        {{ target_user.get_full_name|default:target_user.username }}
+        {% if is_self_dm %}<span style="font-size:13px; color:#9BA1A6; font-weight:normal;">(you)</span>{% endif %}
+      </h2>
+      <p style="font-size:13px; color:#9BA1A6; margin:0; max-width:600px; line-height:1.5;">
+        {% if is_self_dm %}
+          <strong>This space is just for you.</strong> Draft messages, jot down to-do lists, save links or media, or test integrations anytime.
+        {% else %}
+          This is the very beginning of your direct message history with <strong>@{{ target_user.username }}</strong>. Only the two of you can see messages sent here.
+        {% endif %}
+      </p>
+    </div>
+
+    <!-- Messages by Date -->
+    {% for date, dms in dms_by_date.items %}
+      <!-- Date Divider -->
+      <div style="display:flex; align-items:center; justify-content:center; margin:16px 0; position:relative;">
+        <div style="position:absolute; width:100%; height:1px; background:#2B2D31; z-index:1;"></div>
+        <div style="position:relative; z-index:2; background:#1A1D21; padding:0 12px;">
+          <span style="background:#222529; border:1px solid #383A40; color:#D1D2D3; font-size:11.5px; font-weight:700; padding:4px 12px; border-radius:14px; box-shadow:0 1px 3px rgba(0,0,0,0.3); display:inline-flex; align-items:center; gap:4px;">
+            {{ date|date:'l, j F' }} ▾
+          </span>
+        </div>
+      </div>
+
+      <!-- Messages inside this date -->
+      {% for msg in dms %}
+        <div class="dm-message-row" style="display:flex; gap:12px; padding:6px 10px; border-radius:8px; transition:background 0.15s; position:relative;">
+          
+          <!-- Avatar -->
+          <div class="slack-avatar-square" style="width:38px; height:38px; font-size:13px; border-radius:8px; background:{{ msg.sender.profile.avatar_color|default:'#1264A3' }}; flex-shrink:0;">
+            {{ msg.sender.profile.initials|default:'U' }}
+            {% if msg.sender.profile.is_online %}
+              <div class="online-dot" style="width:6px; height:6px;"></div>
+            {% endif %}
+          </div>
+
+          <!-- Message Body -->
+          <div style="flex:1; min-width:0;" id="dm-content-wrapper-{{ msg.id }}">
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
+              <span style="font-weight:800; font-size:14px; color:#FFFFFF;">{{ msg.sender.get_full_name|default:msg.sender.username }}</span>
+              <span style="font-size:11px; color:#AB7C42;">🏕️</span>
+              <span style="font-size:12px; color:#868686;">{{ msg.created_at|date:'H:i' }}</span>
+              <span id="dm-edited-tag-{{ msg.id }}" style="font-size:11px; color:#868686; font-style:italic; display:none;">(edited)</span>
+            </div>
+
+            <!-- Content HTML with rich unfurls & file cards -->
+            <div id="dm-display-text-{{ msg.id }}" style="font-size:14px; line-height:1.5; color:#D1D2D3; word-break:break-word;">
+              {{ msg.formatted_content_html }}
+            </div>
+
+            <!-- Inline DM Quick Editor -->
+            <div id="dm-edit-box-{{ msg.id }}" style="display:none; margin-top:8px; background:#222529; border:1px solid #383A40; border-radius:6px; padding:8px;">
+              <textarea id="dm-edit-textarea-{{ msg.id }}" style="width:100%; min-height:60px; background:#1A1D21; color:#FFF; border:1px solid #383A40; border-radius:4px; padding:8px; font-size:13.5px; font-family:inherit; outline:none; resize:vertical;">{{ msg.content }}</textarea>
+              <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:6px;">
+                <button type="button" class="slack-mini-btn" onclick="cancelEditDm({{ msg.id }})" style="padding:4px 10px; border:1px solid #383A40;">Cancel</button>
+                <button type="button" class="slack-mini-btn" onclick="saveEditDm({{ msg.id }})" style="padding:4px 12px; background:#007A5A; color:#FFF; font-weight:700;">Save</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Quick Action Bar on Hover -->
+          <div class="dm-action-bar" style="position:absolute; right:12px; top:-10px; background:#1A1D21; border:1px solid #383A40; border-radius:6px; display:none; align-items:center; gap:4px; padding:2px 6px; box-shadow:0 2px 6px rgba(0,0,0,0.4); z-index:10;">
+            <button class="slack-mini-btn" onclick="insertEmojiAtEnd('👍')" title="React 👍">👍</button>
+            <button class="slack-mini-btn" onclick="insertEmojiAtEnd('❤️')" title="React ❤️">❤️</button>
+            <button class="slack-mini-btn" onclick="openForwardModal('{{ msg.content|escapejs }}')" title="Forward message">↪️</button>
+            {% if msg.sender == current_user or request.user.is_staff %}
+              <button class="slack-mini-btn" onclick="openEditDm({{ msg.id }})" title="Edit message">✏️</button>
+              <button class="slack-mini-btn" onclick="deleteDm({{ msg.id }})" title="Delete message" style="color:#E01E5A;">🗑️</button>
+            {% endif %}
+          </div>
+        </div>
+      {% endfor %}
+
+    {% empty %}
+      <div style="text-align:center; padding:40px 20px; color:#868686; font-size:13.5px;">
+        No messages yet. Send a message to start the conversation!
+      </div>
+    {% endfor %}
+
+  </div>
+
+  <!-- DM Message Composer (At bottom of screen) -->
+  <div style="padding:12px 20px 20px 20px; background:#1A1D21;">
+    <form action="{% url 'send_direct_message' target_user.username %}" method="POST" id="dm-form" style="background:#222529; border:1px solid #383A40; border-radius:8px; overflow:hidden; box-shadow:0 1px 4px rgba(0,0,0,0.3);">
+      {% csrf_token %}
+      
+      <!-- Composer Top Formatting Bar -->
+      <div style="padding:6px 12px; display:flex; align-items:center; gap:8px; border-bottom:1px solid #2B2D31; background:#1E2226; font-size:13px; color:#9BA1A6;">
+        <button type="button" class="composer-icon-btn" onclick="formatDmInput('**', '**')" title="Bold"><strong>B</strong></button>
+        <button type="button" class="composer-icon-btn" onclick="formatDmInput('*', '*')" title="Italic"><em>I</em></button>
+        <button type="button" class="composer-icon-btn" onclick="formatDmInput('~', '~')" title="Strikethrough"><strike>S</strike></button>
+        <span style="color:#383A40;">|</span>
+        <button type="button" class="composer-icon-btn" onclick="formatDmInput('`', '`')" title="Code">&lt;/&gt;</button>
+        <button type="button" class="composer-icon-btn" onclick="formatDmInput('```\n', '\n```')" title="Code block">📋</button>
+        <button type="button" class="composer-icon-btn" onclick="promptInsertLink()" title="Link">🔗</button>
+      </div>
+
+      <!-- Text Input Area -->
+      <textarea name="content" id="dm-textarea" placeholder="Message {{ target_user.get_full_name|default:target_user.username }}..." required style="width:100%; min-height:60px; max-height:160px; background:transparent; border:none; color:#FFFFFF; font-size:14px; line-height:1.5; padding:10px 14px; resize:none; outline:none; font-family:inherit;" onkeydown="handleDmKeydown(event)"></textarea>
+
+      <!-- Composer Bottom Controls -->
+      <div style="display:flex; align-items:center; justify-content:space-between; padding:6px 12px; background:#1E2226; position:relative;">
+        <div style="display:flex; align-items:center; gap:6px; color:#9BA1A6;">
+          <button type="button" class="composer-icon-btn" onclick="toggleEmojiPicker()" title="Add emoji">😀</button>
+          <button type="button" class="composer-icon-btn" onclick="insertMentionTag()" title="Mention someone">@</button>
+          <button type="button" class="composer-icon-btn" onclick="triggerFileUpload()" title="Attach file">📎</button>
+          <input type="file" id="dm-file-input" style="display:none;" onchange="handleFileAttach(this)">
+        </div>
+
+        <!-- Quick Emoji Popup Bar -->
+        <div id="quick-emoji-bar" style="display:none; position:absolute; bottom:42px; left:12px; background:#1A1D21; border:1px solid #383A40; border-radius:6px; padding:6px 10px; gap:8px; box-shadow:0 4px 12px rgba(0,0,0,0.5); z-index:100;">
+          <span style="cursor:pointer; font-size:16px;" onclick="insertEmoji('😀')">😀</span>
+          <span style="cursor:pointer; font-size:16px;" onclick="insertEmoji('🚀')">🚀</span>
+          <span style="cursor:pointer; font-size:16px;" onclick="insertEmoji('🔥')">🔥</span>
+          <span style="cursor:pointer; font-size:16px;" onclick="insertEmoji('👍')">👍</span>
+          <span style="cursor:pointer; font-size:16px;" onclick="insertEmoji('🎉')">🎉</span>
+          <span style="cursor:pointer; font-size:16px;" onclick="insertEmoji('❤️')">❤️</span>
+          <span style="cursor:pointer; font-size:16px;" onclick="insertEmoji('✅')">✅</span>
+          <span style="cursor:pointer; font-size:16px;" onclick="insertEmoji('🙌')">🙌</span>
+        </div>
+
+        <button type="submit" id="dm-send-btn" style="background:#007A5A; border:none; color:#FFFFFF; width:32px; height:32px; border-radius:4px; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:14px;" title="Send message (Enter)">
+          ➤
+        </button>
+      </div>
+    </form>
+    <div style="font-size:11px; color:#868686; margin-top:4px; display:flex; justify-content:space-between;">
+      <span><strong>Return</strong> to send &bull; <strong>Shift + Return</strong> for new line</span>
+    </div>
+  </div>
+
+</div>
+
+<!-- Styles for DM Link Unfurls and Dark theme message rows -->
+<style>
+  .dm-message-row:hover {
+    background: #222529 !important;
+  }
+  .dm-message-row:hover .dm-action-bar {
+    display: flex !important;
+  }
+  .slack-mini-btn {
+    background: transparent;
+    border: none;
+    color: #9BA1A6;
+    padding: 3px 6px;
+    font-size: 13px;
+    cursor: pointer;
+    border-radius: 4px;
+  }
+  .slack-mini-btn:hover {
+    background: #2C3136;
+    color: #FFF;
+  }
+  .composer-icon-btn {
+    background: transparent;
+    border: none;
+    color: #9BA1A6;
+    padding: 2px 6px;
+    font-size: 13px;
+    cursor: pointer;
+    border-radius: 4px;
+  }
+  .composer-icon-btn:hover {
+    background: #2C3136;
+    color: #FFF;
+  }
+
+  /* Link styling in DM */
+  .slack-link-preview-anchor {
+    color: #1D9BD1 !important;
+    text-decoration: underline;
+    word-break: break-all;
+  }
+  .slack-link-preview-anchor:hover {
+    color: #79C0FF !important;
+  }
+
+  /* Slack Unfurl Link Card (Identical to Slack Dark Theme) */
+  .slack-unfurl-card {
+    display: flex;
+    margin-top: 8px;
+    background: #111315;
+    border: 1px solid #2B2D31;
+    border-left: 4px solid #383A40;
+    border-radius: 6px;
+    max-width: 580px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  }
+  .slack-unfurl-info {
+    padding: 10px 14px;
+    flex: 1;
+    min-width: 0;
+  }
+  .slack-unfurl-title {
+    font-size: 13.5px;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+  .slack-unfurl-title a {
+    color: #FFFFFF;
+    text-decoration: none;
+  }
+  .slack-unfurl-title a:hover {
+    text-decoration: underline;
+    color: #1D9BD1;
+  }
+  .slack-unfurl-description {
+    font-size: 12px;
+    color: #9BA1A6;
+    line-height: 1.4;
+    margin-bottom: 6px;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .slack-unfurl-domain {
+    font-size: 11px;
+    color: #6B7280;
+  }
+  .slack-unfurl-media {
+    width: 80px;
+    background: #1A1D21;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-left: 1px solid #2B2D31;
+    font-size: 24px;
+  }
+
+  /* File snippet card */
+  .slack-file-snippet-card {
+    margin-top: 8px;
+    background: #111315;
+    border: 1px solid #2B2D31;
+    border-radius: 6px;
+    max-width: 480px;
+    overflow: hidden;
+  }
+  .slack-file-snippet-header {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    gap: 10px;
+  }
+  .slack-file-badge {
+    background: #E01E5A;
+    color: #FFF;
+    font-weight: 800;
+    font-size: 11px;
+    padding: 4px 6px;
+    border-radius: 4px;
+    font-family: monospace;
+  }
+  .slack-file-meta {
+    flex: 1;
+  }
+  .slack-file-name {
+    display: block;
+    font-size: 13px;
+    font-weight: 700;
+    color: #FFF;
+  }
+  .slack-file-action {
+    display: block;
+    font-size: 11px;
+    color: #9BA1A6;
+  }
+  .slack-file-actions-icons {
+    display: flex;
+    gap: 4px;
+  }
+</style>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const stream = document.getElementById('dm-messages-stream');
+    if (stream) {
+      stream.scrollTop = stream.scrollHeight;
+    }
+  });
+
+  function handleDmKeydown(event) {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      document.getElementById('dm-form').submit();
+    }
+  }
+
+  function formatDmInput(prefix, suffix) {
+    const textarea = document.getElementById('dm-textarea');
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const sel = textarea.value.substring(start, end);
+    const replacement = prefix + (sel || 'text') + suffix;
+    textarea.value = textarea.value.substring(0, start) + replacement + textarea.value.substring(end);
+    textarea.focus();
+    textarea.setSelectionRange(start + prefix.length, start + prefix.length + (sel.length || 4));
+  }
+
+  function promptInsertLink() {
+    const url = prompt('Enter link URL (e.g. https://github.com):', 'https://');
+    if (url) {
+      const textarea = document.getElementById('dm-textarea');
+      const start = textarea.selectionStart;
+      textarea.value = textarea.value.substring(0, start) + url + ' ' + textarea.value.substring(start);
+      textarea.focus();
+    }
+  }
+
+  function toggleEmojiPicker() {
+    const bar = document.getElementById('quick-emoji-bar');
+    if (bar) {
+      bar.style.display = bar.style.display === 'none' ? 'flex' : 'none';
+    }
+  }
+
+  function insertEmoji(emoji) {
+    const textarea = document.getElementById('dm-textarea');
+    textarea.value += emoji;
+    textarea.focus();
+    toggleEmojiPicker();
+  }
+
+  function insertEmojiAtEnd(emoji) {
+    const textarea = document.getElementById('dm-textarea');
+    textarea.value += ' ' + emoji;
+    textarea.focus();
+  }
+
+  function insertMentionTag() {
+    const textarea = document.getElementById('dm-textarea');
+    textarea.value += '@';
+    textarea.focus();
+  }
+
+  function triggerFileUpload() {
+    const fi = document.getElementById('dm-file-input');
+    if (fi) fi.click();
+  }
+
+  function handleFileAttach(input) {
+    if (input.files && input.files[0]) {
+      const file = input.files[0];
+      const textarea = document.getElementById('dm-textarea');
+      textarea.value = (textarea.value ? textarea.value + '\n' : '') + file.name;
+      textarea.focus();
+    }
+  }
+
+  function openEditDm(msgId) {
+    const display = document.getElementById('dm-display-text-' + msgId);
+    const editBox = document.getElementById('dm-edit-box-' + msgId);
+    if (display && editBox) {
+      display.style.display = 'none';
+      editBox.style.display = 'block';
+    }
+  }
+
+  function cancelEditDm(msgId) {
+    const display = document.getElementById('dm-display-text-' + msgId);
+    const editBox = document.getElementById('dm-edit-box-' + msgId);
+    if (display && editBox) {
+      display.style.display = 'block';
+      editBox.style.display = 'none';
+    }
+  }
+
+  function saveEditDm(msgId) {
+    const textarea = document.getElementById('dm-edit-textarea-' + msgId);
+    if (!textarea) return;
+    const content = textarea.value.trim();
+    if (!content) {
+      alert('Message cannot be empty.');
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('content', content);
+
+    fetch('/dm/messages/' + msgId + '/edit/', {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': getCsrfToken(),
+        'X-Requested-With': 'XMLHttpRequest'
+      },
+      body: formData
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.status === 'ok') {
+        const display = document.getElementById('dm-display-text-' + msgId);
+        const editBox = document.getElementById('dm-edit-box-' + msgId);
+        const editedTag = document.getElementById('dm-edited-tag-' + msgId);
+        if (display) {
+          display.innerHTML = data.html;
+          display.style.display = 'block';
+        }
+        if (editBox) editBox.style.display = 'none';
+        if (editedTag) editedTag.style.display = 'inline';
+      } else {
+        alert(data.error || 'Failed to edit message.');
+      }
+    })
+    .catch(err => alert('Error saving message: ' + err));
+  }
+
+  function deleteDm(msgId) {
+    if (!confirm('Are you sure you want to delete this message? This cannot be undone.')) return;
+
+    fetch('/dm/messages/' + msgId + '/delete/', {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': getCsrfToken(),
+        'X-Requested-With': 'XMLHttpRequest'
+      }
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.status === 'ok') {
+        const row = document.getElementById('dm-content-wrapper-' + msgId);
+        const parentRow = row ? row.closest('.dm-message-row') : null;
+        if (parentRow) {
+          parentRow.style.opacity = '0';
+          parentRow.style.transition = 'all 0.25s ease';
+          setTimeout(() => parentRow.remove(), 260);
+        }
+      } else {
+        alert(data.error || 'Failed to delete message.');
+      }
+    })
+    .catch(err => alert('Error deleting message: ' + err));
+  }
+</script>
+{% endblock %}
+

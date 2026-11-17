@@ -1,0 +1,306 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Analytics & Excel Sheet | StatusPulse Slack{% endblock %}
+
+{% block content %}
+<!-- Top Header -->
+<header class="channel-top-header">
+  <div class="channel-title-meta">
+    <div class="channel-main-title">
+      <span style="font-size:20px;">📈</span>
+      <span>Workspace Analytics & Excel Data</span>
+    </div>
+    <div class="channel-sub-topic">
+      <span>Project progress metrics, standup charts, team tag collaboration, and spreadsheet exports.</span>
+    </div>
+  </div>
+
+  <div class="header-action-group">
+    <a href="{% url 'export_excel' %}" class="slack-btn slack-btn-primary">
+      <span style="font-size:16px;">📥</span>
+      <span>Export to Excel (.xlsx)</span>
+    </a>
+  </div>
+</header>
+
+<!-- Main Scrollable Analytics Dashboard -->
+<div class="feed-timeline-stream" style="padding: 24px 28px; background: #F8F9FA;">
+
+  <!-- 1. KPI Summary Cards Grid -->
+  <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap:14px; margin-bottom:24px;">
+    <!-- Card 1 -->
+    <div style="background:#FFFFFF; border:1px solid #E8E8E8; border-radius:10px; padding:16px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+      <div style="font-size:12px; font-weight:800; color:#777; text-transform:uppercase; margin-bottom:4px;">Total Projects</div>
+      <div style="font-size:26px; font-weight:900; color:#1D1C1D;">{{ total_projects }}</div>
+      <div style="font-size:11.5px; color:#007A5A; margin-top:2px;">📁 Active channels</div>
+    </div>
+
+    <!-- Card 2 -->
+    <div style="background:#FFFFFF; border:1px solid #E8E8E8; border-radius:10px; padding:16px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+      <div style="font-size:12px; font-weight:800; color:#777; text-transform:uppercase; margin-bottom:4px;">Status Messages</div>
+      <div style="font-size:26px; font-weight:900; color:#1264A3;">{{ total_reports }}</div>
+      <div style="font-size:11.5px; color:#1264A3; margin-top:2px;">💬 Daily updates</div>
+    </div>
+
+    <!-- Card 3 -->
+    <div style="background:#FFFFFF; border:1px solid #E8E8E8; border-radius:10px; padding:16px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+      <div style="font-size:12px; font-weight:800; color:#777; text-transform:uppercase; margin-bottom:4px;">Team Members</div>
+      <div style="font-size:26px; font-weight:900; color:#2EB67D;">{{ total_users }}</div>
+      <div style="font-size:11.5px; color:#2EB67D; margin-top:2px;">👥 Workspace seats</div>
+    </div>
+
+    <!-- Card 4 -->
+    <div style="background:#FFFFFF; border:1px solid #E8E8E8; border-radius:10px; padding:16px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+      <div style="font-size:12px; font-weight:800; color:#777; text-transform:uppercase; margin-bottom:4px;">Teammates Tagged</div>
+      <div style="font-size:26px; font-weight:900; color:#E01E5A;">{{ total_tagged }}</div>
+      <div style="font-size:11.5px; color:#E01E5A; margin-top:2px;">🏷️ @mention tags</div>
+    </div>
+
+    <!-- Card 5 -->
+    <div style="background:#FFFFFF; border:1px solid #E8E8E8; border-radius:10px; padding:16px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+      <div style="font-size:12px; font-weight:800; color:#777; text-transform:uppercase; margin-bottom:4px;">Reactions</div>
+      <div style="font-size:26px; font-weight:900; color:#ECB22E;">{{ total_reactions }}</div>
+      <div style="font-size:11.5px; color:#ECB22E; margin-top:2px;">👍 Team emojis</div>
+    </div>
+
+    <!-- Card 6 -->
+    <div style="background:#FFFFFF; border:1px solid #E8E8E8; border-radius:10px; padding:16px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+      <div style="font-size:12px; font-weight:800; color:#777; text-transform:uppercase; margin-bottom:4px;">Thread Replies</div>
+      <div style="font-size:26px; font-weight:900; color:#4A154B;">{{ total_comments }}</div>
+      <div style="font-size:11.5px; color:#4A154B; margin-top:2px;">💭 Discussions</div>
+    </div>
+  </div>
+
+  <!-- 2. Charts Grid (Chart.js) -->
+  <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px; margin-bottom:24px;">
+    <!-- Chart 1: Project Breakdown -->
+    <div style="background:#FFFFFF; border:1px solid #E8E8E8; border-radius:10px; padding:20px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+      <h3 style="font-size:15px; font-weight:800; margin-bottom:14px; color:#1D1C1D; display:flex; align-items:center; justify-content:space-between;">
+        <span>📊 Project Activity Breakdown</span>
+        <span style="font-size:12px; font-weight:500; color:#888;">Updates per channel</span>
+      </h3>
+      <div style="height:260px;">
+        <canvas id="projectChart"></canvas>
+      </div>
+    </div>
+
+    <!-- Chart 2: Timeline Activity -->
+    <div style="background:#FFFFFF; border:1px solid #E8E8E8; border-radius:10px; padding:20px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+      <h3 style="font-size:15px; font-weight:800; margin-bottom:14px; color:#1D1C1D; display:flex; align-items:center; justify-content:space-between;">
+        <span>📈 Daily Standup Timeline</span>
+        <span style="font-size:12px; font-weight:500; color:#888;">Updates frequency</span>
+      </h3>
+      <div style="height:260px;">
+        <canvas id="timelineChart"></canvas>
+      </div>
+    </div>
+
+    <!-- Chart 3: Contributor Distribution -->
+    <div style="background:#FFFFFF; border:1px solid #E8E8E8; border-radius:10px; padding:20px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+      <h3 style="font-size:15px; font-weight:800; margin-bottom:14px; color:#1D1C1D; display:flex; align-items:center; justify-content:space-between;">
+        <span>🍩 Standup Contribution by Teammate</span>
+        <span style="font-size:12px; font-weight:500; color:#888;">Share of updates</span>
+      </h3>
+      <div style="height:260px;">
+        <canvas id="authorChart"></canvas>
+      </div>
+    </div>
+
+    <!-- Chart 4: Most Tagged Members -->
+    <div style="background:#FFFFFF; border:1px solid #E8E8E8; border-radius:10px; padding:20px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+      <h3 style="font-size:15px; font-weight:800; margin-bottom:14px; color:#1D1C1D; display:flex; align-items:center; justify-content:space-between;">
+        <span>🏷️ Most Tagged & Collaborated Members</span>
+        <span style="font-size:12px; font-weight:500; color:#888;">@mention frequency</span>
+      </h3>
+      <div style="height:260px;">
+        <canvas id="taggedChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. Interactive Excel Spreadsheet Data Table -->
+  <div style="background:#FFFFFF; border:1px solid #E8E8E8; border-radius:10px; padding:20px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; flex-wrap:wrap; gap:12px;">
+      <div>
+        <h3 style="font-size:16px; font-weight:900; color:#1D1C1D; display:flex; align-items:center; gap:8px;">
+          <span>📋 Workspace Data Sheet</span>
+          <span style="font-size:11px; background:#E8F5FA; color:#1264A3; padding:2px 8px; border-radius:10px; font-weight:700;">Live Grid Preview</span>
+        </h3>
+        <p style="font-size:12.5px; color:#616061; margin-top:2px;">Complete record of all project updates, authors, tagged colleagues, and metrics.</p>
+      </div>
+
+      <div style="display:flex; align-items:center; gap:10px;">
+        <input type="text" id="sheet-search" class="slack-input" placeholder="Search rows..." style="height:34px; width:220px; font-size:12px;">
+        <a href="{% url 'export_excel' %}" class="slack-btn slack-btn-outline slack-btn-sm" style="height:34px;">
+          <span>📥 Download .xlsx</span>
+        </a>
+      </div>
+    </div>
+
+    <!-- Excel Table -->
+    <div style="overflow-x:auto; border:1px solid #E0E0E0; border-radius:6px;">
+      <table id="analytics-table" style="width:100%; border-collapse:collapse; font-size:13px; text-align:left;">
+        <thead>
+          <tr style="background:#3F0E40; color:#FFFFFF; font-size:12px; text-transform:uppercase;">
+            <th style="padding:10px 12px; border-right:1px solid rgba(255,255,255,0.15);">ID</th>
+            <th style="padding:10px 12px; border-right:1px solid rgba(255,255,255,0.15);">Date</th>
+            <th style="padding:10px 12px; border-right:1px solid rgba(255,255,255,0.15);">Channel</th>
+            <th style="padding:10px 12px; border-right:1px solid rgba(255,255,255,0.15);">Author</th>
+            <th style="padding:10px 12px; border-right:1px solid rgba(255,255,255,0.15);">Role</th>
+            <th style="padding:10px 12px; border-right:1px solid rgba(255,255,255,0.15); min-width:280px;">Message / Update Content</th>
+            <th style="padding:10px 12px; border-right:1px solid rgba(255,255,255,0.15);">Tagged</th>
+            <th style="padding:10px 12px; text-align:center;">Replies</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in all_reports_list %}
+            <tr style="border-bottom:1px solid #EEEEEE; background:{% cycle '#FFFFFF' '#FAFBFD' %};">
+              <td style="padding:9px 12px; font-weight:700; color:#888;">#{{ r.id }}</td>
+              <td style="padding:9px 12px; white-space:nowrap; font-weight:600;">{{ r.date|date:"Y-m-d" }}</td>
+              <td style="padding:9px 12px;">
+                <span class="msg-channel-pill">#{{ r.project.name }}</span>
+              </td>
+              <td style="padding:9px 12px; font-weight:700;">{{ r.author.get_full_name|default:r.author.username }}</td>
+              <td style="padding:9px 12px; color:#666; font-size:12px;">{{ r.author.profile.role }}</td>
+              <td style="padding:9px 12px; color:#222; line-height:1.4;">{{ r.content|default:r.yesterday_work|truncatechars:120 }}</td>
+              <td style="padding:9px 12px;">
+                {% for tu in r.tagged_users.all %}
+                  <span class="slack-mention" style="font-size:11px;">@{{ tu.username }}</span>
+                {% empty %}
+                  <span style="color:#AAA; font-size:11px;">None</span>
+                {% endfor %}
+              </td>
+              <td style="padding:9px 12px; text-align:center; font-weight:700; color:#1264A3;">{{ r.comments.count }}</td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="8" style="padding:24px 12px; text-align:center; color:#6B778C; font-size:13px; font-style:italic;">
+                No status reports logged yet. Give your first update in any project channel to view analytics!
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<!-- Chart.js CDN -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  // Chart Colors (Slack Aubergine, Blue, Green, Yellow, Red)
+  const slackPalette = ['#3F0E40', '#1264A3', '#007A5A', '#ECB22E', '#E01E5A', '#36C5F0', '#611f69'];
+
+  // 1. Project Breakdown Bar Chart
+  const ctxProject = document.getElementById('projectChart').getContext('2d');
+  new Chart(ctxProject, {
+    type: 'bar',
+    data: {
+      labels: {{ project_names|safe }},
+      datasets: [{
+        label: 'Updates Count',
+        data: {{ project_counts|safe }},
+        backgroundColor: '#1264A3',
+        borderRadius: 4
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { beginAtZero: true, ticks: { stepSize: 1 } }
+      }
+    }
+  });
+
+  // 2. Timeline Line Chart
+  const ctxTimeline = document.getElementById('timelineChart').getContext('2d');
+  new Chart(ctxTimeline, {
+    type: 'line',
+    data: {
+      labels: {{ timeline_labels|safe }},
+      datasets: [{
+        label: 'Updates Posted',
+        data: {{ timeline_data|safe }},
+        borderColor: '#007A5A',
+        backgroundColor: 'rgba(0, 122, 90, 0.1)',
+        fill: true,
+        tension: 0.3,
+        pointRadius: 5,
+        pointBackgroundColor: '#007A5A'
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { beginAtZero: true, ticks: { stepSize: 1 } }
+      }
+    }
+  });
+
+  // 3. Contributor Donut Chart
+  const ctxAuthor = document.getElementById('authorChart').getContext('2d');
+  new Chart(ctxAuthor, {
+    type: 'doughnut',
+    data: {
+      labels: {{ author_names|safe }},
+      datasets: [{
+        data: {{ author_counts|safe }},
+        backgroundColor: slackPalette
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'right' }
+      }
+    }
+  });
+
+  // 4. Most Tagged Teammates Bar Chart
+  const ctxTagged = document.getElementById('taggedChart').getContext('2d');
+  new Chart(ctxTagged, {
+    type: 'bar',
+    data: {
+      labels: {{ tagged_names|safe }},
+      datasets: [{
+        label: 'Times Tagged (@)',
+        data: {{ tagged_counts|safe }},
+        backgroundColor: '#E01E5A',
+        borderRadius: 4
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { beginAtZero: true, ticks: { stepSize: 1 } }
+      }
+    }
+  });
+
+  // 5. Excel Table Live Search Filter
+  const searchInput = document.getElementById('sheet-search');
+  if (searchInput) {
+    searchInput.addEventListener('input', (e) => {
+      const q = e.target.value.toLowerCase();
+      const rows = document.querySelectorAll('#analytics-table tbody tr');
+      rows.forEach(r => {
+        const text = r.textContent.toLowerCase();
+        r.style.display = text.includes(q) ? '' : 'none';
+      });
+    });
+  }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,177 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}
+  {% if tagged_me %}Mentions & Reactions{% else %}All Channels Feed{% endif %} | Slack DSR
+{% endblock %}
+
+{% block content %}
+<!-- Top Header for Unified Feed -->
+<header class="channel-top-header">
+  <div class="channel-title-meta">
+    <div class="channel-main-title">
+      <span style="font-size:18px;">{% if tagged_me %}🏷️{% else %}📊{% endif %}</span>
+      <span>{% if tagged_me %}Activity & Mentions (@{{ current_user.username }}){% else %}Workspace All-Channels Feed{% endif %}</span>
+    </div>
+    <div class="channel-sub-topic">
+      <span>{% if tagged_me %}Status updates where you have been mentioned or tagged by colleagues.{% else %}Asynchronous standup feed across all projects in the workspace.{% endif %}</span>
+    </div>
+  </div>
+
+  <div class="header-action-group">
+    <!-- Quick filter pill toggles -->
+    <a href="{% url 'all_reports' %}" class="slack-btn {% if not tagged_me and not active_filter_project %}slack-btn-primary{% else %}slack-btn-outline{% endif %} slack-btn-sm">
+      All Updates
+    </a>
+    <a href="{% url 'all_reports' %}?tagged_me=1" class="slack-btn {% if tagged_me %}slack-btn-primary{% else %}slack-btn-outline{% endif %} slack-btn-sm">
+      🏷️ Tagged Me ({{ my_mentions_count }})
+    </a>
+
+    <!-- Date Picker Filter -->
+    <input type="date" id="feed-date-filter" class="composer-date-input" value="{{ active_filter_date|default:'' }}" title="Filter by date">
+    {% if active_filter_date or active_filter_member or active_filter_project or tagged_me %}
+      <a href="{% url 'all_reports' %}" class="slack-btn slack-btn-outline slack-btn-sm">Reset</a>
+    {% endif %}
+  </div>
+</header>
+
+<!-- Feed Timeline Stream -->
+<div class="feed-timeline-stream">
+
+  <!-- Channel Chips Bar -->
+  <div style="display:flex; align-items:center; gap:8px; margin-bottom:16px; flex-wrap:wrap; padding:8px 12px; background:#F8F9FA; border-radius:6px; border:1px solid #E8E8E8;">
+    <span style="font-size:12px; font-weight:800; color:#616061;">Filter Channels:</span>
+    <a href="{% url 'all_reports' %}{% if tagged_me %}?tagged_me=1{% endif %}" class="channel-item-name" style="font-size:12px; padding:3px 8px; background:{% if not active_filter_project %}#1164A3;color:#FFF;{% else %}#EEE;color:#333;{% endif %} border-radius:12px; text-decoration:none; font-weight:700;">
+      All
+    </a>
+    {% for p in sidebar_projects %}
+      <a href="{% url 'all_reports' %}?project={{ p.slug }}{% if tagged_me %}&tagged_me=1{% endif %}" style="font-size:12px; padding:3px 8px; background:{% if active_filter_project == p.slug %}#1164A3;color:#FFF;{% else %}#EEE;color:#333;{% endif %} border-radius:12px; text-decoration:none; font-weight:700;">
+        #{{ p.name }}
+      </a>
+    {% endfor %}
+  </div>
+
+  {% if reports_by_date %}
+    {% for date, reports in reports_by_date.items %}
+      <div class="slack-day-divider">
+        <span class="divider-badge">📅 {{ date|date:"l, F j, Y" }}</span>
+      </div>
+
+      {% for report in reports %}
+        <div class="slack-msg-row">
+          <!-- Author Avatar -->
+          <div class="slack-avatar-square" style="width:36px;height:36px;font-size:13px;border-radius:6px;background:{{ report.author.profile.avatar_color }};">
+            {{ report.author.profile.initials }}
+            {% if report.author.profile.is_online %}
+              <div class="online-dot"></div>
+            {% endif %}
+          </div>
+
+          <!-- Message Hover Toolbar -->
+          <div class="msg-hover-toolbar">
+            <button class="toolbar-action-btn js-manual-react" data-report-id="{{ report.id }}" data-emoji="👍" title="React 👍">👍</button>
+            <button class="toolbar-action-btn js-manual-react" data-report-id="{{ report.id }}" data-emoji="🚀" title="React 🚀">🚀</button>
+            <button class="toolbar-action-btn js-manual-react" data-report-id="{{ report.id }}" data-emoji="🔥" title="React 🔥">🔥</button>
+            <button class="toolbar-action-btn js-manual-react" data-report-id="{{ report.id }}" data-emoji="❤️" title="React ❤️">❤️</button>
+            <button class="toolbar-action-btn" onclick="document.getElementById('reply-form-{{ report.id }}').focus()" title="Reply in thread">💬</button>
+            <button class="toolbar-action-btn" onclick="openForwardModal('{{ report.content|default:report.what_done_today|escapejs }}')" title="Forward message">↪️</button>
+            {% if report.author == current_user or request.user.is_staff or report.project.created_by == current_user %}
+              <button class="toolbar-action-btn" onclick="openEditMessage({{ report.id }})" title="Edit message">✏️</button>
+              <button class="toolbar-action-btn action-btn-delete" onclick="deleteMessage({{ report.id }})" title="Delete message">🗑️</button>
+            {% endif %}
+          </div>
+
+          <!-- Message Body -->
+          <div class="msg-main-content" id="msg-content-wrapper-{{ report.id }}">
+            <div class="msg-meta-line">
+              <span class="msg-sender-name">{{ report.author.get_full_name|default:report.author.username }}</span>
+              <a href="{% url 'project_detail' report.project.slug %}" class="msg-channel-pill" title="Jump to channel #{{ report.project.name }}">
+                #{{ report.project.name }}
+              </a>
+              <span class="msg-timestamp">{{ report.created_at|date:"g:i A" }}</span>
+              <span id="msg-edited-tag-{{ report.id }}" style="font-size:11px; color:#888; font-style:italic; display:none;">(edited)</span>
+            </div>
+
+            <!-- Normal Chat Content with @mentions formatted -->
+            <div id="msg-display-text-{{ report.id }}" style="font-size:14.5px; line-height:1.5; color:#1D1C1D; margin-top:4px; word-break:break-word;">
+              {{ report.message_html }}
+            </div>
+
+            <!-- Inline Quick Message Editor -->
+            <div id="msg-edit-box-{{ report.id }}" class="msg-inline-editor" style="display:none; margin-top:6px;">
+              <textarea id="msg-edit-textarea-{{ report.id }}" class="slack-dsr-textarea" style="width:100%; min-height:60px; font-size:13.5px;">{{ report.content }}</textarea>
+              <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:6px;">
+                <button type="button" class="slack-btn slack-btn-outline slack-btn-sm" onclick="cancelEditMessage({{ report.id }})">Cancel</button>
+                <button type="button" class="slack-btn slack-btn-primary slack-btn-sm" onclick="saveEditMessage({{ report.id }})">Save changes</button>
+              </div>
+            </div>
+
+
+            <!-- Tagged People Mentions -->
+            {% if report.tagged_users.exists %}
+              <div class="slack-tags-row">
+                <span class="tags-label">Tagged teammates:</span>
+                {% for tu in report.tagged_users.all %}
+                  <a href="{% url 'all_reports' %}?member={{ tu.username }}" class="slack-mention" title="{{ tu.get_full_name|default:tu.username }} ({{ tu.profile.role }})">
+                    @{{ tu.username }}
+                  </a>
+                {% endfor %}
+              </div>
+            {% endif %}
+
+            <!-- Manual Reactions Bar (Empty by default, appears only when reacted!) -->
+            <div class="slack-reactions-bar" id="reactions-bar-{{ report.id }}" style="display: {% if report.reactions.exists %}flex{% else %}none{% endif %};">
+              {% for r in report.get_reaction_summary %}
+                <div class="reaction-chip {% if r.user_reacted %}active{% endif %}" onclick="manualToggleReaction({{ report.id }}, '{{ r.emoji }}')" title="{{ r.users|join:', ' }}">
+                  <span>{{ r.emoji }}</span> <span>{{ r.count }}</span>
+                </div>
+              {% endfor %}
+            </div>
+
+            <!-- Thread Comments List -->
+            <div class="thread-preview-block">
+              {% if report.comments.exists %}
+                <div class="thread-replies-list">
+                  {% for c in report.comments.all %}
+                    <div class="thread-reply-item">
+                      <div class="slack-avatar-square" style="width:20px;height:20px;font-size:9px;background:{{ c.author.profile.avatar_color }};">
+                        {{ c.author.profile.initials }}
+                      </div>
+                      <div style="flex:1;">
+                        <span class="thread-reply-author">{{ c.author.get_full_name|default:c.author.username }}</span>
+                        <span class="thread-reply-time">{{ c.created_at|date:"g:i A" }}</span>
+                        <div style="margin-top:2px; color:#1D1C1D;">{{ c.message }}</div>
+                      </div>
+                    </div>
+                  {% endfor %}
+                </div>
+              {% endif %}
+
+              <!-- Quick reply input -->
+              <form action="{% url 'add_comment' report.id %}" method="POST" class="thread-quick-reply-form">
+                {% csrf_token %}
+                <input type="text" id="reply-form-{{ report.id }}" name="message" class="thread-reply-input mention-input" placeholder="Reply in thread or tag team with @..." required>
+                <button type="submit" class="slack-btn slack-btn-outline slack-btn-sm">Send</button>
+              </form>
+            </div>
+
+          </div>
+        </div>
+      {% endfor %}
+    {% endfor %}
+  {% else %}
+    <div style="text-align:center; padding:70px 20px; color:#616061;">
+      <div style="font-size:48px; margin-bottom:12px;">🔍</div>
+      <h2 style="font-size:20px; font-weight:900; color:#1D1C1D; margin-bottom:6px;">No reports found</h2>
+      <p style="font-size:14px; max-width:440px; margin:0 auto 16px;">
+        {% if tagged_me %}
+          You have not been tagged in any status updates yet. Teammates can tag you using <code>@{{ current_user.username }}</code>!
+        {% else %}
+          No daily updates match your current filter.
+        {% endif %}
+      </p>
+    </div>
+  {% endif %}
+
+</div>
+{% endblock %}

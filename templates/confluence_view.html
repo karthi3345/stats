@@ -1,0 +1,838 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ project.name }} - Confluence Weekly Status{% endblock %}
+
+{% block content %}
+<!-- Channel Top Navigation Bar with View Switcher -->
+<header class="channel-top-header">
+  <div class="channel-title-meta">
+    <div class="channel-main-title">
+      <span style="font-size:18px;">📄</span>
+      <span>{{ project.name|upper }} Project Status Documentation</span>
+    </div>
+    <div class="channel-sub-topic">
+      <span>Confluence Weekly & Daily Progress Matrix</span>
+    </div>
+  </div>
+
+  <div class="header-action-group">
+    <!-- View Switcher -->
+    <a href="{% url 'project_detail' project.slug %}" class="slack-btn slack-btn-outline slack-btn-sm" title="Switch to Slack Chat Stream">
+      <span>💬 Chat Feed</span>
+    </a>
+    <a href="{% url 'project_confluence' project.slug %}" class="slack-btn slack-btn-primary slack-btn-sm" title="Confluence Weekly Table View">
+      <span>📄 Confluence View</span>
+    </a>
+
+    <!-- Add Status Entry Modal Trigger -->
+    <button class="slack-btn slack-btn-outline slack-btn-sm" data-open-modal="confluence-status-modal" style="background:#0052CC; color:#FFF; border-color:#0052CC;">
+      <span>➕ Give Daily Status Entry</span>
+    </button>
+  </div>
+</header>
+
+<!-- Confluence Page Document Container -->
+<div class="feed-timeline-stream" style="padding: 28px 36px; background: #FFFFFF; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;">
+
+  <!-- Breadcrumb -->
+  <div style="font-size:13px; color:#6B778C; margin-bottom:12px; display:flex; align-items:center; gap:6px;">
+    <span>Spaces</span>
+    <span>/</span>
+    <span style="font-weight:600; color:#172B4D;">Team {{ project.name|upper }}</span>
+    <span>/</span>
+    <span>Weekly DSR Pages</span>
+  </div>
+
+  <!-- Document Title & Edit Action -->
+  <div style="display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:8px; gap:16px;">
+    <div>
+      <h1 id="confluence-page-heading" style="font-size:28px; font-weight:800; color:#172B4D; margin:0 0 6px 0; letter-spacing:-0.5px;">
+        {{ project.confluence_page_title|default:project.name|upper|add:" Project 3rd Sept week 2026" }}
+      </h1>
+      <!-- Confluence Metadata Bar -->
+      <div style="display:flex; align-items:center; gap:14px; font-size:13px; color:#6B778C; flex-wrap:wrap;">
+        <span>By <strong style="color:#172B4D;">{% if project.created_by %}{{ project.created_by.get_full_name|default:project.created_by.username }}{% else %}Workspace Team{% endif %}</strong></span>
+        <span>&bull;</span>
+        <span>⏱️ 2 min read</span>
+        <span>&bull;</span>
+        <span style="cursor:pointer; color:#0052CC;">🎧 Listen</span>
+        <span>&bull;</span>
+        <span style="background:#F4F5F7; border:1px solid #DFE1E6; padding:2px 8px; border-radius:12px; font-weight:700; color:#172B4D;">⭐ 7 Reactions</span>
+      </div>
+    </div>
+    
+    <!-- Edit Header Button -->
+    <button type="button" class="slack-btn slack-btn-outline" onclick="openEditConfluenceHeaderModal()" style="border-color:#DFE1E6; color:#0052CC; font-weight:700; font-size:12.5px; height:34px; display:inline-flex; align-items:center; gap:6px; background:#FAFBFC;">
+      <span>✏️ Edit Header &amp; Team Details</span>
+    </button>
+  </div>
+
+  <div style="border-bottom:1px solid #DFE1E6; margin-bottom:20px; padding-bottom:12px;"></div>
+
+  <!-- Confluence Project & Team Properties Card (Interactive & Editable) -->
+  <div style="background:#FAFBFC; border:1.5px solid #DFE1E6; border-radius:10px; padding:18px 22px; margin-bottom:28px; max-width:850px; position:relative; box-shadow:0 1px 3px rgba(9,30,66,0.04);">
+    <div style="position:absolute; top:12px; right:12px;">
+      <button type="button" onclick="openEditConfluenceHeaderModal()" title="Edit Team & Supervisor" style="background:#FFFFFF; border:1px solid #DFE1E6; border-radius:6px; color:#0052CC; font-size:11.5px; font-weight:700; padding:4px 8px; cursor:pointer; display:inline-flex; align-items:center; gap:4px; box-shadow:0 1px 2px rgba(9,30,66,0.04);">
+        <span>✏️ Edit</span>
+      </button>
+    </div>
+
+    <div style="display:grid; grid-template-columns: 170px 1fr; row-gap:12px; font-size:13.5px;">
+      <div style="font-weight:700; color:#5E6C84; display:flex; align-items:center; gap:6px;">
+        <span>🏢</span> Team name
+      </div>
+      <div id="display-team-name" style="font-weight:800; color:#172B4D; font-size:14px;">
+        {{ project.team_name|default:"Team MSGSWITCH" }}
+      </div>
+
+      <div style="font-weight:700; color:#5E6C84; display:flex; align-items:center; gap:6px;">
+        <span>👔</span> Direct supervisor
+      </div>
+      <div id="display-supervisor" style="color:#172B4D; font-weight:600; font-size:13.5px;">
+        {{ project.supervisor|default:"Girish S, Dinesh Naik" }}
+      </div>
+
+      <div style="font-weight:700; color:#5E6C84; display:flex; align-items:center; gap:6px;">
+        <span>👥</span> Team Members
+      </div>
+      <div style="display:flex; flex-wrap:wrap; gap:6px; align-items:center;">
+        {% for m in project_members %}
+          <span style="background:#EBECF0; color:#172B4D; padding:3px 9px; border-radius:14px; font-size:12px; font-weight:600; display:inline-flex; align-items:center; gap:4px; border:1px solid #DFE1E6;">
+            <span style="width:16px; height:16px; border-radius:50%; background:{{ m.profile.avatar_color|default:'#0052CC' }}; color:#FFF; display:inline-flex; align-items:center; justify-content:center; font-size:9px; font-weight:700;">
+              {{ m.profile.initials|default:m.username|slice:":2"|upper }}
+            </span>
+            {{ m.get_full_name|default:m.username }}
+          </span>
+        {% endfor %}
+        <button type="button" class="slack-btn slack-btn-outline slack-btn-sm" data-open-modal="add-members-modal" style="padding:1px 8px; font-size:11px; height:24px; border-radius:12px; border-style:dashed;">
+          + Manage Members
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Table of Contents -->
+  <div style="background:#F4F5F7; border-left:4px solid #0052CC; padding:14px 20px; border-radius:0 6px 6px 0; margin-bottom:32px; max-width:480px;">
+    <div style="font-size:14px; font-weight:800; color:#172B4D; margin-bottom:8px;">Table of contents</div>
+    <ul style="list-style:none; padding-left:0; margin:0; display:flex; flex-direction:column; gap:6px;">
+      {% for day in days_data %}
+        <li>
+          <a href="#{{ day.anchor }}" style="color:#0052CC; font-weight:600; text-decoration:none; font-size:13.5px;">
+            {{ day.title }}
+          </a>
+        </li>
+      {% endfor %}
+    </ul>
+  </div>
+
+  <!-- Daily Confluence Tables -->
+  {% for day in days_data %}
+    <div id="{{ day.anchor }}" style="margin-bottom:40px;">
+      <h2 style="font-size:20px; font-weight:800; color:#172B4D; margin-bottom:12px; display:flex; align-items:center; justify-content:space-between; border-bottom:2px solid #DFE1E6; padding-bottom:6px;">
+        <span>📅 {{ day.title }}</span>
+        <button class="slack-btn slack-btn-outline slack-btn-sm" data-open-modal="confluence-status-modal" style="font-size:11.5px;">
+          + Add Entry for this day
+        </button>
+      </h2>
+
+      <!-- Confluence Data Table -->
+      <div style="overflow-x:auto; border:1px solid #DFE1E6; border-radius:4px; box-shadow:0 1px 2px rgba(9,30,66,0.06);">
+        <table style="width:100%; border-collapse:collapse; font-size:13px; text-align:left; background:#FFFFFF;">
+          <thead>
+            <tr style="background:#F4F5F7; color:#172B4D; border-bottom:1.5px solid #DFE1E6; font-size:12.5px; font-weight:700;">
+              <th style="padding:10px 12px; width:40px; border-right:1px solid #DFE1E6;">#</th>
+              <th style="padding:10px 12px; width:170px; border-right:1px solid #DFE1E6;">Name</th>
+              <th style="padding:10px 12px; width:130px; border-right:1px solid #DFE1E6;">Project Name</th>
+              <th style="padding:10px 12px; width:140px; border-right:1px solid #DFE1E6;">Priorities</th>
+              <th style="padding:10px 12px; min-width:240px; border-right:1px solid #DFE1E6;">What you did yesterday</th>
+              <th style="padding:10px 12px; min-width:220px; border-right:1px solid #DFE1E6;">What I’m doing today</th>
+              <th style="padding:10px 12px; width:90px; border-right:1px solid #DFE1E6;">Blockers</th>
+              <th style="padding:10px 12px; min-width:180px; border-right:1px solid #DFE1E6;">Links/notes(jira/confluence etc anything)</th>
+              <th style="padding:10px 12px; width:65px; text-align:center;">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for report in day.reports %}
+              <tr id="confluence-report-row-{{ report.id }}" style="border-bottom:1px solid #DFE1E6; background:{% cycle '#FFFFFF' '#FAFBFC' %};">
+                <td style="padding:10px 12px; font-weight:700; color:#5E6C84; border-right:1px solid #DFE1E6;">{{ forloop.counter }}</td>
+                <td style="padding:10px 12px; font-weight:700; color:#172B4D; border-right:1px solid #DFE1E6;">
+                  {{ report.author.get_full_name|default:report.author.username }}
+                </td>
+                <td style="padding:10px 12px; border-right:1px solid #DFE1E6;">
+                  <span style="font-weight:700; color:#0052CC;">{{ report.project.name|upper }}</span>
+                </td>
+                <td id="row-priority-{{ report.id }}" style="padding:10px 12px; border-right:1px solid #DFE1E6;">
+                  {% if 'sanity' in report.priority|lower %}
+                    <span style="background:#E3FCEF; color:#006644; padding:3px 8px; border-radius:4px; font-weight:700; font-size:11.5px;">
+                      {{ report.priority }}
+                    </span>
+                  {% elif 'low' in report.priority|lower %}
+                    <span style="background:#EBECF0; color:#42526E; padding:3px 8px; border-radius:4px; font-weight:700; font-size:11.5px;">
+                      Low
+                    </span>
+                  {% elif 'high' in report.priority|lower %}
+                    <span style="background:#FFEBE6; color:#DE350B; padding:3px 8px; border-radius:4px; font-weight:700; font-size:11.5px;">
+                      High
+                    </span>
+                  {% else %}
+                    <span style="background:#DEEBFF; color:#0747A6; padding:3px 8px; border-radius:4px; font-weight:700; font-size:11.5px;">
+                      {{ report.priority }}
+                    </span>
+                  {% endif %}
+                </td>
+                <td id="row-yesterday-{{ report.id }}" style="padding:10px 12px; color:#172B4D; line-height:1.45; border-right:1px solid #DFE1E6;">
+                  {{ report.what_done_today_html|default:report.yesterday_work_html|default:"-"|linebreaksbr }}
+                </td>
+                <td id="row-today-{{ report.id }}" style="padding:10px 12px; color:#172B4D; line-height:1.45; border-right:1px solid #DFE1E6;">
+                  {{ report.today_plan_html|default:"Continue to perform tasks"|linebreaksbr }}
+                </td>
+                <td id="row-blockers-{{ report.id }}" style="padding:10px 12px; border-right:1px solid #DFE1E6;">
+                  {% if report.has_blockers %}
+                    <span style="background:#FFEBE6; color:#DE350B; padding:2px 6px; border-radius:4px; font-weight:700; font-size:11px;">
+                      {{ report.blockers|truncatechars:20 }}
+                    </span>
+                  {% else %}
+                    <span style="color:#006644; font-weight:700; font-size:12px;">No</span>
+                  {% endif %}
+                </td>
+                <td id="row-links-{{ report.id }}" style="padding:10px 12px; color:#172B4D; border-right:1px solid #DFE1E6;">
+                  {% if 'http' in report.links_notes %}
+                    <a href="{{ report.links_notes }}" target="_blank" style="color:#0052CC; font-weight:600; text-decoration:underline;">
+                      Sign In / Link &rarr;
+                    </a>
+                  {% else %}
+                    {{ report.links_notes|default:"No" }}
+                  {% endif %}
+                </td>
+                <td style="padding:10px 8px; text-align:center;">
+                  <button type="button" onclick="openEditReportModal({{ report.id }}, '{{ report.priority|escapejs }}', '{{ report.yesterday_work|default:report.what_done_today|escapejs }}', '{{ report.today_plan|escapejs }}', '{{ report.blockers|default:'No'|escapejs }}', '{{ report.links_notes|default:'No'|escapejs }}')"
+                    title="Edit Status Row"
+                    style="background:#FAFBFC; border:1px solid #DFE1E6; border-radius:6px; color:#0052CC; font-size:12px; font-weight:700; padding:4px 8px; cursor:pointer; display:inline-flex; align-items:center; gap:2px; box-shadow:0 1px 2px rgba(9,30,66,0.05);">
+                    <span>✏️</span>
+                  </button>
+                </td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="9" style="padding:16px; text-align:center; color:#6B778C; font-style:italic;">
+                  No status entries logged for this day yet.
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  {% endfor %}
+
+</div>
+
+<!-- Confluence Status Entry Creation Modal -->
+<!-- Confluence Status Entry Creation Modal - PREMIUM DESIGN -->
+<div id="confluence-status-modal" class="modal-overlay" style="backdrop-filter: blur(4px); background: rgba(9, 30, 66, 0.54);">
+  <div class="slack-modal-card" style="max-width: 680px; width: 95%; border-radius: 14px; box-shadow: 0 20px 45px rgba(9, 30, 66, 0.28), 0 4px 12px rgba(9, 30, 66, 0.08); border: 1px solid #DFE1E6; overflow: hidden; background: #FFFFFF; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+    <!-- Header -->
+    <div style="background: linear-gradient(135deg, #0052CC 0%, #0747A6 100%); color: #FFFFFF; padding: 20px 24px; position: relative;">
+      <div style="display: flex; align-items: center; justify-content: space-between;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <div style="width: 36px; height: 36px; border-radius: 8px; background: rgba(255,255,255,0.18); display: flex; align-items: center; justify-content: center; font-size: 18px; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.25);">
+            📄
+          </div>
+          <div>
+            <h2 style="color: #FFFFFF; font-size: 18px; font-weight: 700; margin: 0; letter-spacing: -0.2px;">Daily Status Report</h2>
+            <div style="color: rgba(255,255,255,0.82); font-size: 12px; margin-top: 2px;">
+              Publish official Confluence tracking log for <strong style="color: #FFFFFF;">#{{ project.name }}</strong>
+            </div>
+          </div>
+        </div>
+        <button class="modal-close-icon" style="color: rgba(255,255,255,0.8); background: rgba(255,255,255,0.15); border: none; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 20px; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.25)'; this.style.color='#FFF';" onmouseout="this.style.background='rgba(255,255,255,0.15)'; this.style.color='rgba(255,255,255,0.8)';" data-close-modal>&times;</button>
+      </div>
+    </div>
+
+    <!-- Body / Form -->
+    <form action="{% url 'submit_report' project.slug %}" method="POST" style="margin: 0;">
+      {% csrf_token %}
+      <div style="padding: 24px; max-height: calc(85vh - 140px); overflow-y: auto; background: #FFFFFF;">
+        
+        <!-- Top Row: Date & Priority -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 18px;">
+          <div>
+            <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: #344563; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">
+              <span style="font-size: 14px;">📅</span> Date
+            </label>
+            <input type="date" name="date" value="{% now 'Y-m-d' %}" required
+              style="width: 100%; height: 40px; padding: 0 12px; border-radius: 8px; border: 1.5px solid #DFE1E6; background: #FAFBFC; color: #172B4D; font-size: 13.5px; font-weight: 500; outline: none; transition: all 0.2s; box-sizing: border-box;"
+              onfocus="this.style.borderColor='#0052CC'; this.style.background='#FFFFFF'; this.style.boxShadow='0 0 0 3px rgba(0, 82, 204, 0.15)';"
+              onblur="this.style.borderColor='#DFE1E6'; this.style.background='#FAFBFC'; this.style.boxShadow='none';">
+          </div>
+          <div>
+            <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: #344563; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">
+              <span style="font-size: 14px;">🎯</span> Priority / Focus
+            </label>
+            <input type="text" name="priority" value="Perform sanity testing" placeholder="e.g. Perform sanity testing, Critical, High" required
+              style="width: 100%; height: 40px; padding: 0 12px; border-radius: 8px; border: 1.5px solid #DFE1E6; background: #FAFBFC; color: #172B4D; font-size: 13.5px; font-weight: 500; outline: none; transition: all 0.2s; box-sizing: border-box;"
+              onfocus="this.style.borderColor='#0052CC'; this.style.background='#FFFFFF'; this.style.boxShadow='0 0 0 3px rgba(0, 82, 204, 0.15)';"
+              onblur="this.style.borderColor='#DFE1E6'; this.style.background='#FAFBFC'; this.style.boxShadow='none';">
+          </div>
+        </div>
+
+        <!-- 1. What you did yesterday -->
+        <div style="margin-bottom: 18px;">
+          <label style="display: flex; align-items: center; justify-content: space-between; font-size: 13px; font-weight: 700; color: #006644; margin-bottom: 6px;">
+            <span><span style="font-size: 14px;">✅</span> 1. What you did yesterday <span style="font-size: 11.5px; font-weight: 500; color: #6B778C;">(Tasks completed)</span></span>
+            <span style="font-size: 11px; font-weight: 600; background: #E3FCEF; color: #006644; padding: 2px 7px; border-radius: 4px;">Required</span>
+          </label>
+          <textarea name="yesterday_work" rows="3" required autofocus
+            placeholder="Completed sanity testing, reviewed the updated documents against the QA timeline, and communicated the necessary updates to the team."
+            style="width: 100%; padding: 10px 14px; border-radius: 8px; border: 1.5px solid #DFE1E6; background: #FAFBFC; color: #172B4D; font-size: 13.5px; line-height: 1.5; font-family: inherit; outline: none; transition: all 0.2s; resize: vertical; box-sizing: border-box;"
+            onfocus="this.style.borderColor='#006644'; this.style.background='#FFFFFF'; this.style.boxShadow='0 0 0 3px rgba(0, 102, 68, 0.15)';"
+            onblur="this.style.borderColor='#DFE1E6'; this.style.background='#FAFBFC'; this.style.boxShadow='none';"></textarea>
+        </div>
+
+        <!-- 2. What I'm doing today -->
+        <div style="margin-bottom: 18px;">
+          <label style="display: flex; align-items: center; justify-content: space-between; font-size: 13px; font-weight: 700; color: #0052CC; margin-bottom: 6px;">
+            <span><span style="font-size: 14px;">🎯</span> 2. What I’m doing today <span style="font-size: 11.5px; font-weight: 500; color: #6B778C;">(Plan &amp; Focus)</span></span>
+            <span style="font-size: 11px; font-weight: 600; background: #DEEBFF; color: #0747A6; padding: 2px 7px; border-radius: 4px;">Required</span>
+          </label>
+          <textarea name="today_plan" rows="2" required
+            placeholder="Continue to perform sanity testing"
+            style="width: 100%; padding: 10px 14px; border-radius: 8px; border: 1.5px solid #DFE1E6; background: #FAFBFC; color: #172B4D; font-size: 13.5px; line-height: 1.5; font-family: inherit; outline: none; transition: all 0.2s; resize: vertical; box-sizing: border-box;"
+            onfocus="this.style.borderColor='#0052CC'; this.style.background='#FFFFFF'; this.style.boxShadow='0 0 0 3px rgba(0, 82, 204, 0.15)';"
+            onblur="this.style.borderColor='#DFE1E6'; this.style.background='#FAFBFC'; this.style.boxShadow='none';"></textarea>
+        </div>
+
+        <!-- 3. Blockers -->
+        <div style="margin-bottom: 18px;">
+          <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: #DE350B; margin-bottom: 6px;">
+            <span style="font-size: 14px;">⚠️</span> 3. Blockers <span style="font-size: 11.5px; font-weight: 500; color: #6B778C;">(or enter &quot;No&quot;)</span>
+          </label>
+          <input type="text" name="blockers" value="No" placeholder="No"
+            style="width: 100%; height: 40px; padding: 0 12px; border-radius: 8px; border: 1.5px solid #DFE1E6; background: #FAFBFC; color: #172B4D; font-size: 13.5px; font-weight: 500; outline: none; transition: all 0.2s; box-sizing: border-box;"
+            onfocus="this.style.borderColor='#DE350B'; this.style.background='#FFFFFF'; this.style.boxShadow='0 0 0 3px rgba(222, 53, 11, 0.15)';"
+            onblur="this.style.borderColor='#DFE1E6'; this.style.background='#FAFBFC'; this.style.boxShadow='none';">
+        </div>
+
+        <!-- 4. Links / Notes -->
+        <div style="margin-bottom: 18px;">
+          <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: #344563; margin-bottom: 6px;">
+            <span style="font-size: 14px;">🔗</span> 4. Links / Notes <span style="font-size: 11.5px; font-weight: 500; color: #6B778C;">(Jira, Confluence, Staging URL)</span>
+          </label>
+          <input type="text" name="links_notes" value="No" placeholder="e.g. https://stagev2.sms.v6001.com/admin/login or Jira: MSGSWITCH-102"
+            style="width: 100%; height: 40px; padding: 0 12px; border-radius: 8px; border: 1.5px solid #DFE1E6; background: #FAFBFC; color: #172B4D; font-size: 13.5px; font-weight: 500; outline: none; transition: all 0.2s; box-sizing: border-box;"
+            onfocus="this.style.borderColor='#0052CC'; this.style.background='#FFFFFF'; this.style.boxShadow='0 0 0 3px rgba(0, 82, 204, 0.15)';"
+            onblur="this.style.borderColor='#DFE1E6'; this.style.background='#FAFBFC'; this.style.boxShadow='none';">
+        </div>
+
+        <!-- 5. Tag Teammates (Modern Chip Selector) -->
+        <div>
+          <label style="display: flex; align-items: center; justify-content: space-between; font-size: 13px; font-weight: 700; color: #344563; margin-bottom: 8px;">
+            <span><span style="font-size: 14px;">👥</span> 5. Tag Teammates in Status</span>
+            <span style="font-size: 11.5px; font-weight: 500; color: #6B778C;">Click to select</span>
+          </label>
+          <div style="display: flex; flex-wrap: wrap; gap: 8px; padding: 12px; border-radius: 8px; border: 1.5px solid #DFE1E6; background: #FAFBFC; min-height: 52px; box-sizing: border-box;">
+            {% for member in project.members.all %}
+              {% if member != current_user %}
+                <label style="margin: 0; cursor: pointer; user-select: none;">
+                  <input type="checkbox" name="tagged_users" value="{{ member.id }}" style="display: none;" onchange="toggleTagChip(this)">
+                  <span class="confluence-tag-chip" style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 20px; border: 1.5px solid #DFE1E6; background: #FFFFFF; font-size: 12px; font-weight: 600; color: #42526E; transition: all 0.2s; box-shadow: 0 1px 2px rgba(9, 30, 66, 0.05);">
+                    <span style="width: 20px; height: 20px; border-radius: 50%; background: {{ member.profile.avatar_color|default:'#0052CC' }}; color: #FFF; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700;">
+                      {{ member.profile.initials|default:member.username|slice:":2"|upper }}
+                    </span>
+                    <span>@{{ member.username }}</span>
+                    <span class="chip-check" style="display: none; font-size: 11px; margin-left: 2px;">✓</span>
+                  </span>
+                </label>
+              {% endif %}
+            {% empty %}
+              <div style="font-size: 12px; color: #6B778C; font-style: italic;">No other team members in this project.</div>
+            {% endfor %}
+          </div>
+          <div style="font-size: 11.5px; color: #6B778C; margin-top: 6px; display: flex; align-items: center; gap: 4px;">
+            <span>💡</span> You can also mention colleagues in the text using <code style="background: #EBECF0; padding: 1px 5px; border-radius: 4px; font-size: 11px; color: #172B4D;">@username</code>.
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Footer -->
+      <div style="padding: 16px 24px; background: #FAFBFC; border-top: 1px solid #DFE1E6; display: flex; align-items: center; justify-content: flex-end; gap: 12px;">
+        <button type="button" data-close-modal
+          style="padding: 9px 18px; border-radius: 6px; border: 1.5px solid #DFE1E6; background: #FFFFFF; color: #42526E; font-size: 13.5px; font-weight: 600; cursor: pointer; transition: all 0.2s;"
+          onmouseover="this.style.background='#EBECF0'; this.style.color='#172B4D';"
+          onmouseout="this.style.background='#FFFFFF'; this.style.color='#42526E';">
+          Cancel
+        </button>
+        <button type="submit"
+          style="display: inline-flex; align-items: center; gap: 8px; padding: 9px 22px; border-radius: 6px; border: none; background: linear-gradient(135deg, #0052CC 0%, #0747A6 100%); color: #FFFFFF; font-size: 13.5px; font-weight: 700; cursor: pointer; box-shadow: 0 4px 12px rgba(0, 82, 204, 0.3); transition: all 0.2s;"
+          onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 6px 16px rgba(0, 82, 204, 0.4)';"
+          onmouseout="this.style.transform='none'; this.style.boxShadow='0 4px 12px rgba(0, 82, 204, 0.3)';">
+          <span>Publish to Confluence Table</span>
+          <span style="font-size: 15px;">🚀</span>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal: Edit Confluence Header & Team Details -->
+<div id="edit-confluence-header-modal" class="modal-overlay" style="display:none; backdrop-filter: blur(4px); background: rgba(9, 30, 66, 0.54);">
+  <div class="slack-modal-card" style="max-width: 580px; width: 95%; border-radius: 14px; box-shadow: 0 20px 45px rgba(9, 30, 66, 0.28); border: 1px solid #DFE1E6; overflow: hidden; background: #FFFFFF; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+    <div style="background: linear-gradient(135deg, #0052CC 0%, #0747A6 100%); color: #FFFFFF; padding: 18px 24px; display: flex; align-items: center; justify-content: space-between;">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <span style="font-size: 20px;">✏️</span>
+        <div>
+          <h2 style="color: #FFFFFF; font-size: 17px; font-weight: 700; margin: 0;">Edit Confluence Document Details</h2>
+          <div style="color: rgba(255,255,255,0.8); font-size: 11.5px; margin-top: 2px;">Update page title, team name, and direct supervisor</div>
+        </div>
+      </div>
+      <button type="button" onclick="closeEditConfluenceHeaderModal()" style="color: rgba(255,255,255,0.8); background: rgba(255,255,255,0.15); border: none; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 18px; cursor: pointer;">&times;</button>
+    </div>
+
+    <form id="edit-confluence-header-form" onsubmit="saveConfluenceHeader(event)" style="margin: 0;">
+      {% csrf_token %}
+      <div style="padding: 22px 24px; background: #FFFFFF; display: flex; flex-direction: column; gap: 16px;">
+        
+        <!-- Document Title -->
+        <div>
+          <label style="display: block; font-size: 12.5px; font-weight: 700; color: #344563; margin-bottom: 6px;">
+            📄 Document Page Title
+          </label>
+          <input type="text" id="input-page-title" name="confluence_page_title"
+            value="{{ project.confluence_page_title|default:project.name|upper|add:' Project 3rd Sept week 2026' }}"
+            placeholder="e.g. MOBILE-BANKING-APP Project 3rd Sept week 2026" required
+            style="width: 100%; height: 40px; padding: 0 12px; border-radius: 8px; border: 1.5px solid #DFE1E6; background: #FAFBFC; color: #172B4D; font-size: 13.5px; font-weight: 500; outline: none; box-sizing: border-box;"
+            onfocus="this.style.borderColor='#0052CC'; this.style.background='#FFF';"
+            onblur="this.style.borderColor='#DFE1E6'; this.style.background='#FAFBFC';">
+        </div>
+
+        <!-- Team Name -->
+        <div>
+          <label style="display: block; font-size: 12.5px; font-weight: 700; color: #344563; margin-bottom: 6px;">
+            🏢 Team Name
+          </label>
+          <input type="text" id="input-team-name" name="team_name"
+            value="{{ project.team_name|default:'Team MSGSWITCH' }}"
+            placeholder="e.g. Team MSGSWITCH" required
+            style="width: 100%; height: 40px; padding: 0 12px; border-radius: 8px; border: 1.5px solid #DFE1E6; background: #FAFBFC; color: #172B4D; font-size: 13.5px; font-weight: 500; outline: none; box-sizing: border-box;"
+            onfocus="this.style.borderColor='#0052CC'; this.style.background='#FFF';"
+            onblur="this.style.borderColor='#DFE1E6'; this.style.background='#FAFBFC';">
+        </div>
+
+        <!-- Direct Supervisor -->
+        <div>
+          <label style="display: block; font-size: 12.5px; font-weight: 700; color: #344563; margin-bottom: 6px;">
+            👔 Direct Supervisor(s)
+          </label>
+          <input type="text" id="input-supervisor" name="supervisor"
+            value="{{ project.supervisor|default:'Girish S, Dinesh Naik' }}"
+            placeholder="e.g. Girish S, Dinesh Naik" required
+            style="width: 100%; height: 40px; padding: 0 12px; border-radius: 8px; border: 1.5px solid #DFE1E6; background: #FAFBFC; color: #172B4D; font-size: 13.5px; font-weight: 500; outline: none; box-sizing: border-box;"
+            onfocus="this.style.borderColor='#0052CC'; this.style.background='#FFF';"
+            onblur="this.style.borderColor='#DFE1E6'; this.style.background='#FAFBFC';">
+          <div style="font-size: 11.5px; color: #6B778C; margin-top: 4px;">Separate multiple supervisors with a comma.</div>
+        </div>
+
+      </div>
+
+      <div style="padding: 14px 24px; background: #FAFBFC; border-top: 1px solid #DFE1E6; display: flex; align-items: center; justify-content: flex-end; gap: 10px;">
+        <button type="button" onclick="closeEditConfluenceHeaderModal()"
+          style="padding: 8px 16px; border-radius: 6px; border: 1.5px solid #DFE1E6; background: #FFFFFF; color: #42526E; font-size: 13px; font-weight: 600; cursor: pointer;">
+          Cancel
+        </button>
+        <button type="submit" id="btn-save-confluence-header"
+          style="padding: 8px 20px; border-radius: 6px; border: none; background: #0052CC; color: #FFFFFF; font-size: 13px; font-weight: 700; cursor: pointer; box-shadow: 0 2px 6px rgba(0, 82, 204, 0.3);">
+          Save Changes
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function toggleTagChip(checkbox) {
+  const chip = checkbox.nextElementSibling;
+  const checkMark = chip.querySelector('.chip-check');
+  if (checkbox.checked) {
+    chip.style.borderColor = '#0052CC';
+    chip.style.background = '#DEEBFF';
+    chip.style.color = '#0052CC';
+    chip.style.boxShadow = '0 0 0 2px rgba(0, 82, 204, 0.25)';
+    if (checkMark) checkMark.style.display = 'inline';
+  } else {
+    chip.style.borderColor = '#DFE1E6';
+    chip.style.background = '#FFFFFF';
+    chip.style.color = '#42526E';
+    chip.style.boxShadow = '0 1px 2px rgba(9, 30, 66, 0.05)';
+    if (checkMark) checkMark.style.display = 'none';
+  }
+}
+
+function openEditConfluenceHeaderModal() {
+  const m = document.getElementById('edit-confluence-header-modal');
+  if (m) m.style.display = 'flex';
+}
+
+function closeEditConfluenceHeaderModal() {
+  const m = document.getElementById('edit-confluence-header-modal');
+  if (m) m.style.display = 'none';
+}
+
+function saveConfluenceHeader(e) {
+  e.preventDefault();
+  const btn = document.getElementById('btn-save-confluence-header');
+  btn.disabled = true;
+  btn.innerText = 'Saving...';
+
+  const formData = new FormData(document.getElementById('edit-confluence-header-form'));
+  fetch("{% url 'update_confluence_header' project.slug %}", {
+    method: 'POST',
+    headers: {
+      'X-Requested-With': 'XMLHttpRequest',
+      'Accept': 'application/json'
+    },
+    body: formData
+  })
+  .then(res => res.json())
+  .then(data => {
+    btn.disabled = false;
+    btn.innerText = 'Save Changes';
+    if (data.status === 'ok') {
+      const heading = document.getElementById('confluence-page-heading');
+      if (heading) heading.innerText = data.confluence_page_title;
+      
+      const teamDisplay = document.getElementById('display-team-name');
+      if (teamDisplay) teamDisplay.innerText = data.team_name;
+
+      const supDisplay = document.getElementById('display-supervisor');
+      if (supDisplay) supDisplay.innerText = data.supervisor;
+
+      closeEditConfluenceHeaderModal();
+    } else {
+      alert(data.message || 'Error updating header details.');
+    }
+  })
+  .catch(err => {
+    btn.disabled = false;
+    btn.innerText = 'Save Changes';
+    console.error(err);
+    alert('Failed to save header updates.');
+let currentEditingReportId = null;
+
+function openEditReportModal(reportId, priority, yesterday, today, blockers, links) {
+  currentEditingReportId = reportId;
+  const modal = document.getElementById('edit-daily-report-modal');
+  if (!modal) return;
+  
+  document.getElementById('edit-report-id').value = reportId;
+  document.getElementById('edit-report-priority').value = priority || 'Medium';
+  document.getElementById('edit-report-yesterday').value = yesterday || '';
+  document.getElementById('edit-report-today').value = today || '';
+  document.getElementById('edit-report-blockers').value = blockers || 'No';
+  document.getElementById('edit-report-links').value = links || 'No';
+
+  modal.style.display = 'flex';
+}
+
+function closeEditReportModal() {
+  const modal = document.getElementById('edit-daily-report-modal');
+  if (modal) modal.style.display = 'none';
+  currentEditingReportId = null;
+}
+
+function saveEditedReport(e) {
+  e.preventDefault();
+  if (!currentEditingReportId) return;
+  const btn = document.getElementById('btn-save-edited-report');
+  btn.disabled = true;
+  btn.innerText = 'Saving...';
+
+  const formData = new FormData(document.getElementById('edit-daily-report-form'));
+  const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+  fetch(`/reports/${currentEditingReportId}/edit/`, {
+    method: 'POST',
+    headers: {
+      'X-Requested-With': 'XMLHttpRequest',
+      'X-CSRFToken': csrfToken,
+      'Accept': 'application/json'
+    },
+    body: formData
+  })
+  .then(res => res.json())
+  .then(data => {
+    btn.disabled = false;
+    btn.innerText = 'Save Changes';
+    if (data.status === 'ok') {
+      const repId = data.report_id;
+      
+      // Update Priority cell
+      const prioCell = document.getElementById(`row-priority-${repId}`);
+      if (prioCell) {
+        const p = data.priority.toLowerCase();
+        let badgeStyle = 'background:#DEEBFF; color:#0747A6; padding:3px 8px; border-radius:4px; font-weight:700; font-size:11.5px;';
+        if (p.includes('sanity')) {
+          badgeStyle = 'background:#E3FCEF; color:#006644; padding:3px 8px; border-radius:4px; font-weight:700; font-size:11.5px;';
+        } else if (p.includes('low')) {
+          badgeStyle = 'background:#EBECF0; color:#42526E; padding:3px 8px; border-radius:4px; font-weight:700; font-size:11.5px;';
+        } else if (p.includes('high') || p.includes('urgent') || p.includes('critical')) {
+          badgeStyle = 'background:#FFEBE6; color:#DE350B; padding:3px 8px; border-radius:4px; font-weight:700; font-size:11.5px;';
+        }
+        prioCell.innerHTML = `<span style="${badgeStyle}">${escapeHtml(data.priority)}</span>`;
+      }
+
+      // Update Yesterday cell
+      const yestCell = document.getElementById(`row-yesterday-${repId}`);
+      if (yestCell) {
+        yestCell.innerHTML = (data.yesterday_work_html || escapeHtml(data.yesterday_work || '-')).replace(/\n/g, '<br>');
+      }
+
+      // Update Today cell
+      const todayCell = document.getElementById(`row-today-${repId}`);
+      if (todayCell) {
+        todayCell.innerHTML = (data.today_plan_html || escapeHtml(data.today_plan || 'Continue to perform tasks')).replace(/\n/g, '<br>');
+      }
+
+      // Update Blockers cell
+      const blockCell = document.getElementById(`row-blockers-${repId}`);
+      if (blockCell) {
+        if (data.has_blockers) {
+          blockCell.innerHTML = `<span style="background:#FFEBE6; color:#DE350B; padding:2px 6px; border-radius:4px; font-weight:700; font-size:11px;">${escapeHtml(data.blockers.substring(0, 20))}</span>`;
+        } else {
+          blockCell.innerHTML = `<span style="color:#006644; font-weight:700; font-size:12px;">No</span>`;
+        }
+      }
+
+      // Update Links cell
+      const linksCell = document.getElementById(`row-links-${repId}`);
+      if (linksCell) {
+        if (data.links_notes && data.links_notes.includes('http')) {
+          linksCell.innerHTML = `<a href="${escapeHtml(data.links_notes)}" target="_blank" style="color:#0052CC; font-weight:600; text-decoration:underline;">Sign In / Link &rarr;</a>`;
+        } else {
+          linksCell.textContent = data.links_notes || 'No';
+        }
+      }
+
+      closeEditReportModal();
+    } else {
+      alert(data.message || 'Error updating status row.');
+    }
+  })
+  .catch(err => {
+    btn.disabled = false;
+    btn.innerText = 'Save Changes';
+    console.error(err);
+    alert('Failed to save status row updates.');
+  });
+}
+
+function escapeHtml(text) {
+  if (!text) return '';
+  const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
+  return String(text).replace(/[&<>"']/g, function(m) { return map[m]; });
+}
+</script>
+
+<!-- Modal: Edit Confluence Daily Status Entry -->
+<div id="edit-daily-report-modal" class="modal-overlay" style="display:none; backdrop-filter: blur(4px); background: rgba(9, 30, 66, 0.54);">
+  <div class="slack-modal-card" style="max-width: 680px; width: 95%; border-radius: 14px; box-shadow: 0 20px 45px rgba(9, 30, 66, 0.28); border: 1px solid #DFE1E6; overflow: hidden; background: #FFFFFF; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+    
+    <!-- Modal Header -->
+    <div style="background: linear-gradient(135deg, #0052CC 0%, #0747A6 100%); color: #FFFFFF; padding: 18px 24px; display: flex; align-items: center; justify-content: space-between;">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <span style="font-size: 20px;">✏️</span>
+        <div>
+          <h2 style="color: #FFFFFF; font-size: 17px; font-weight: 700; margin: 0;">Edit Status Report Entry</h2>
+          <div style="color: rgba(255,255,255,0.8); font-size: 11.5px; margin-top: 2px;">Update Priorities, Work, Plan, Blockers &amp; Links for #{{ project.name }}</div>
+        </div>
+      </div>
+      <button class="modal-close-icon" style="color: rgba(255,255,255,0.8); background: rgba(255,255,255,0.15); border: none; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 18px; cursor: pointer;" onclick="closeEditReportModal()">&times;</button>
+    </div>
+
+    <!-- Form -->
+    <form id="edit-daily-report-form" onsubmit="saveEditedReport(event)" style="margin: 0;">
+      {% csrf_token %}
+      <input type="hidden" id="edit-report-id" name="report_id">
+
+      <div style="padding: 22px 24px; max-height: calc(85vh - 140px); overflow-y: auto; background: #FFFFFF; display: flex; flex-direction: column; gap: 16px;">
+        
+        <!-- Priority -->
+        <div>
+          <label style="display: block; font-size: 12.5px; font-weight: 700; color: #344563; margin-bottom: 6px;">
+            ⚡ Priorities / Task Summary <span style="color:#DE350B;">*</span>
+          </label>
+          <input type="text" id="edit-report-priority" name="priority" required
+            placeholder="e.g. Perform sanity testing, Critical Bug Fix"
+            style="width: 100%; height: 38px; padding: 0 12px; border-radius: 6px; border: 1.5px solid #DFE1E6; background: #FAFBFC; color: #172B4D; font-size: 13.5px; font-weight: 500; outline: none; box-sizing: border-box;"
+            onfocus="this.style.borderColor='#0052CC'; this.style.background='#FFF';"
+            onblur="this.style.borderColor='#DFE1E6'; this.style.background='#FAFBFC';">
+        </div>
+
+        <!-- What you did yesterday -->
+        <div>
+          <label style="display: block; font-size: 12.5px; font-weight: 700; color: #344563; margin-bottom: 6px;">
+            🕒 What you did yesterday
+          </label>
+          <textarea id="edit-report-yesterday" name="yesterday_work" rows="3"
+            placeholder="Details of what was completed yesterday..."
+            style="width: 100%; padding: 8px 12px; border-radius: 6px; border: 1.5px solid #DFE1E6; background: #FAFBFC; color: #172B4D; font-size: 13px; font-family: inherit; line-height: 1.45; outline: none; resize: vertical; box-sizing: border-box;"
+            onfocus="this.style.borderColor='#0052CC'; this.style.background='#FFF';"
+            onblur="this.style.borderColor='#DFE1E6'; this.style.background='#FAFBFC';"></textarea>
+        </div>
+
+        <!-- What I'm doing today -->
+        <div>
+          <label style="display: block; font-size: 12.5px; font-weight: 700; color: #344563; margin-bottom: 6px;">
+            🎯 What I’m doing today
+          </label>
+          <textarea id="edit-report-today" name="today_plan" rows="3"
+            placeholder="Goals and plan for today..."
+            style="width: 100%; padding: 8px 12px; border-radius: 6px; border: 1.5px solid #DFE1E6; background: #FAFBFC; color: #172B4D; font-size: 13px; font-family: inherit; line-height: 1.45; outline: none; resize: vertical; box-sizing: border-box;"
+            onfocus="this.style.borderColor='#0052CC'; this.style.background='#FFF';"
+            onblur="this.style.borderColor='#DFE1E6'; this.style.background='#FAFBFC';"></textarea>
+        </div>
+
+        <!-- Blockers -->
+        <div>
+          <label style="display: block; font-size: 12.5px; font-weight: 700; color: #344563; margin-bottom: 6px;">
+            🛑 Blockers (Enter "No" if none)
+          </label>
+          <input type="text" id="edit-report-blockers" name="blockers"
+            placeholder="e.g. No or Waiting for API token"
+            style="width: 100%; height: 38px; padding: 0 12px; border-radius: 6px; border: 1.5px solid #DFE1E6; background: #FAFBFC; color: #172B4D; font-size: 13.5px; font-weight: 500; outline: none; box-sizing: border-box;"
+            onfocus="this.style.borderColor='#0052CC'; this.style.background='#FFF';"
+            onblur="this.style.borderColor='#DFE1E6'; this.style.background='#FAFBFC';">
+        </div>
+
+        <!-- Links/notes -->
+        <div>
+          <label style="display: block; font-size: 12.5px; font-weight: 700; color: #344563; margin-bottom: 6px;">
+            🔗 Links / Notes (Jira, Confluence, etc.)
+          </label>
+          <input type="text" id="edit-report-links" name="links_notes"
+            placeholder="e.g. https://jira.atlassian.com/browse/KEY-123 or No"
+            style="width: 100%; height: 38px; padding: 0 12px; border-radius: 6px; border: 1.5px solid #DFE1E6; background: #FAFBFC; color: #172B4D; font-size: 13.5px; font-weight: 500; outline: none; box-sizing: border-box;"
+            onfocus="this.style.borderColor='#0052CC'; this.style.background='#FFF';"
+            onblur="this.style.borderColor='#DFE1E6'; this.style.background='#FAFBFC';">
+        </div>
+
+      </div>
+
+      <!-- Footer Buttons -->
+      <div style="padding: 14px 24px; background: #FAFBFC; border-top: 1px solid #DFE1E6; display: flex; align-items: center; justify-content: flex-end; gap: 10px;">
+        <button type="button" onclick="closeEditReportModal()"
+          style="padding: 8px 16px; border-radius: 6px; border: 1.5px solid #DFE1E6; background: #FFFFFF; color: #42526E; font-size: 13px; font-weight: 600; cursor: pointer;">
+          Cancel
+        </button>
+        <button type="submit" id="btn-save-edited-report"
+          style="padding: 8px 20px; border-radius: 6px; border: none; background: #0052CC; color: #FFFFFF; font-size: 13px; font-weight: 700; cursor: pointer; box-shadow: 0 2px 6px rgba(0, 82, 204, 0.3);">
+          Save Changes
+        </button>
+      </div>
+    </form>
+
+  </div>
+</div>
+
+<div id="add-members-modal" class="modal-overlay" style="backdrop-filter: blur(4px); background: rgba(9, 30, 66, 0.54);">
+  <div class="slack-modal-card" style="max-width: 600px; width: 95%; border-radius: 14px; box-shadow: 0 20px 45px rgba(9, 30, 66, 0.28); border: 1px solid #DFE1E6; overflow: hidden; background: #FFFFFF; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+    <div style="background: linear-gradient(135deg, #0052CC 0%, #0747A6 100%); color: #FFFFFF; padding: 18px 24px; display: flex; align-items: center; justify-content: space-between;">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <span style="font-size: 20px;">👥</span>
+        <div>
+          <h2 style="color: #FFFFFF; font-size: 17px; font-weight: 700; margin: 0;">People in #{{ project.name }}</h2>
+          <div style="color: rgba(255,255,255,0.8); font-size: 11.5px; margin-top: 2px;">Manage channel access and team membership</div>
+        </div>
+      </div>
+      <button class="modal-close-icon" style="color: rgba(255,255,255,0.8); background: rgba(255,255,255,0.15); border: none; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 18px; cursor: pointer;" data-close-modal>&times;</button>
+    </div>
+
+    <div style="padding: 22px 24px; max-height: calc(85vh - 130px); overflow-y: auto; background: #FFFFFF;">
+      <!-- Current Members Section with 1-Click Remove -->
+      <div style="margin-bottom: 22px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+          <label style="font-size: 12px; font-weight: 700; text-transform: uppercase; color: #344563; letter-spacing: 0.5px; margin: 0;">
+            Current Members ({{ project_members.count }})
+          </label>
+          <span style="font-size: 11.5px; color: #6B778C;">Click &times; to remove from channel</span>
+        </div>
+        
+        <div style="display: flex; flex-direction: column; gap: 8px; max-height: 180px; overflow-y: auto; padding: 2px;">
+          {% for m in project_members %}
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 6px 12px; background: #FAFBFC; border: 1px solid #DFE1E6; border-radius: 8px;">
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <div style="width: 28px; height: 28px; border-radius: 50%; background: {{ m.profile.avatar_color|default:'#0052CC' }}; color: #FFF; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700;">
+                  {{ m.profile.initials|default:m.username|slice:":2"|upper }}
+                </div>
+                <div>
+                  <div style="font-size: 13px; font-weight: 700; color: #172B4D;">
+                    {{ m.get_full_name|default:m.username }}
+                    {% if m == current_user %}<span style="font-size: 11px; color: #0052CC; font-weight: 600;">(you)</span>{% endif %}
+                  </div>
+                  <div style="font-size: 11px; color: #6B778C;">@{{ m.username }} &bull; {{ m.profile.role|default:'Member' }}</div>
+                </div>
+              </div>
+
+              <!-- Remove button -->
+              {% if project_members.count > 1 %}
+                <form action="{% url 'remove_project_member' project.slug m.id %}" method="POST" style="margin: 0;" onsubmit="return confirm('Remove @{{ m.username }} from #{{ project.name }}?');">
+                  {% csrf_token %}
+                  <button type="submit" style="background: transparent; border: 1px solid #FFEBE6; color: #DE350B; border-radius: 6px; padding: 3px 8px; font-size: 11px; font-weight: 600; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='#FFEBE6'; this.style.borderColor='#FFBDAD';" onmouseout="this.style.background='transparent'; this.style.borderColor='#FFEBE6';">
+                    Remove &times;
+                  </button>
+                </form>
+              {% endif %}
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- Add New Colleagues Section -->
+      <div>
+        <label style="display: block; font-size: 12px; font-weight: 700; text-transform: uppercase; color: #344563; letter-spacing: 0.5px; margin-bottom: 10px;">
+          Add More Teammates
+        </label>
+        
+        {% if available_users %}
+          <form action="{% url 'add_project_members' project.slug %}" method="POST" style="margin: 0;">
+            {% csrf_token %}
+            <div style="display: flex; flex-direction: column; gap: 8px; max-height: 190px; overflow-y: auto; padding: 2px; margin-bottom: 16px;">
+              {% for u in available_users %}
+                <label style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border: 1.5px solid #DFE1E6; border-radius: 8px; background: #FFFFFF; cursor: pointer; transition: all 0.15s;" onmouseover="this.style.borderColor='#0052CC'; this.style.background='#FAFBFC';" onmouseout="this.style.borderColor='#DFE1E6'; this.style.background='#FFFFFF';">
+                  <div style="display: flex; align-items: center; gap: 10px;">
+                    <input type="checkbox" name="user_ids" value="{{ u.id }}" style="width: 16px; height: 16px; cursor: pointer; accent-color: #0052CC;">
+                    <div style="width: 28px; height: 28px; border-radius: 50%; background: {{ u.profile.avatar_color|default:'#0052CC' }}; color: #FFF; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700;">
+                      {{ u.profile.initials|default:u.username|slice:":2"|upper }}
+                    </div>
+                    <div>
+                      <div style="font-size: 13px; font-weight: 700; color: #172B4D;">{{ u.get_full_name|default:u.username }}</div>
+                      <div style="font-size: 11px; color: #6B778C;">@{{ u.username }} &bull; {{ u.profile.role|default:'Member' }}</div>
+                    </div>
+                  </div>
+                </label>
+              {% endfor %}
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; gap: 10px;">
+              <button type="button" class="slack-btn slack-btn-outline" data-close-modal style="padding: 7px 14px; font-size: 12.5px;">Close</button>
+              <button type="submit" style="background: linear-gradient(135deg, #0052CC 0%, #0747A6 100%); color: #FFF; border: none; padding: 7px 18px; border-radius: 6px; font-size: 12.5px; font-weight: 700; cursor: pointer; box-shadow: 0 2px 6px rgba(0,82,204,0.3);">
+                + Add Selected Members
+              </button>
+            </div>
+          </form>
+        {% else %}
+          <div style="padding: 14px; background: #F4F5F7; border-radius: 8px; font-size: 12.5px; color: #6B778C; text-align: center;">
+            ✨ All workspace members are already part of this channel!
+          </div>
+          <div style="display: flex; justify-content: flex-end; margin-top: 14px;">
+            <button type="button" class="slack-btn slack-btn-outline" data-close-modal style="padding: 7px 14px; font-size: 12.5px;">Close</button>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
