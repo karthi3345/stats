@@ -2127,3 +2127,68 @@ def forward_message(request):
         messages.success(request, f"Forwarded to #{project.name}!")
         return redirect('project_detail', slug=project.slug)
 
+
+# ==============================================================================
+# REAL-TIME SLACK TYPING INDICATOR API
+# ==============================================================================
+from django.core.cache import cache
+import time
+
+@require_POST
+@login_required(login_url='login')
+def report_typing_status(request):
+    """Client notifies server that request.user is currently typing in a channel or DM thread"""
+    room_type = request.POST.get('room_type', 'channel') # 'channel' or 'dm'
+    room_id = request.POST.get('room_id', '').strip()     # project slug or other username
+    
+    if not room_id:
+        return JsonResponse({'status': 'ignored'})
+
+    if room_type == 'dm':
+        participants = sorted([request.user.username.lower(), room_id.lower()])
+        cache_key = f"typing_dm_{participants[0]}_{participants[1]}"
+    else:
+        cache_key = f"typing_channel_{room_id.lower()}"
+
+    typing_users = cache.get(cache_key, {})
+    now = time.time()
+    display_name = request.user.get_full_name() or request.user.username
+    typing_users[request.user.username] = {
+        'display_name': display_name,
+        'username': request.user.username,
+        'timestamp': now
+    }
+    cache.set(cache_key, typing_users, timeout=10)
+    return JsonResponse({'status': 'ok'})
+
+
+@login_required(login_url='login')
+def get_typing_status(request):
+    """Fetches list of active users typing in this room (excluding current user)"""
+    room_type = request.GET.get('room_type', 'channel')
+    room_id = request.GET.get('room_id', '').strip()
+
+    if not room_id:
+        return JsonResponse({'typing_users': []})
+
+    if room_type == 'dm':
+        participants = sorted([request.user.username.lower(), room_id.lower()])
+        cache_key = f"typing_dm_{participants[0]}_{participants[1]}"
+    else:
+        cache_key = f"typing_channel_{room_id.lower()}"
+
+    typing_users = cache.get(cache_key, {})
+    now = time.time()
+    active_typers = []
+    updated_dict = {}
+
+    for uname, data in typing_users.items():
+        if now - data['timestamp'] < 4.0:
+            updated_dict[uname] = data
+            if uname != request.user.username:
+                active_typers.append(data['display_name'])
+
+    cache.set(cache_key, updated_dict, timeout=10)
+    return JsonResponse({'typing_users': active_typers})
+
+

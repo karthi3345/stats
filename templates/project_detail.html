@@ -241,11 +241,21 @@
       </div>
 
       <!-- Quick Message Textarea -->
-      <div style="padding: 10px 14px;">
+      <div style="padding: 10px 14px 4px 14px;">
         <textarea name="content" id="chat-composer-textarea" class="slack-dsr-textarea mention-input"
           onkeydown="if(event.key==='Enter' && !event.shiftKey){ event.preventDefault(); if(this.value.trim()){ this.form.submit(); } }"
           style="min-height:68px; border:none; resize:none; font-size:14px; width:100%; outline:none;"
           placeholder="Message #{{ project.name }}... (Press Enter to send, Shift+Enter for new line)" required></textarea>
+      </div>
+
+      <!-- Slack Channel Typing Indicator Bar -->
+      <div id="channel-typing-indicator" style="display:none; align-items:center; gap:6px; padding:0 14px 4px 14px; color:#1264A3; font-weight:600; font-size:12px;">
+        <span class="typing-dots-animation">
+          <span class="typing-dot"></span>
+          <span class="typing-dot"></span>
+          <span class="typing-dot"></span>
+        </span>
+        <span id="channel-typing-text"></span>
       </div>
 
       <!-- Bottom Actions Toolbar -->
@@ -3719,4 +3729,69 @@ function saveEditedReport(e) {
   </div>
 </div>
 
+<script>
+  // Real-time Channel Typing Indicator Listener & Poller
+  (function() {
+    const channelSlug = "{{ project.slug|escapejs }}";
+    let lastReportedChannelTyping = 0;
+
+    function reportChannelTyping() {
+      const now = Date.now();
+      if (now - lastReportedChannelTyping < 1800) return;
+      lastReportedChannelTyping = now;
+
+      const fd = new FormData();
+      fd.append('room_type', 'channel');
+      fd.append('room_id', channelSlug);
+
+      fetch('/api/typing/report/', {
+        method: 'POST',
+        headers: {
+          'X-CSRFToken': getCsrfToken(),
+        },
+        body: fd
+      }).catch(() => {});
+    }
+
+    const composerTextarea = document.getElementById('chat-composer-textarea');
+    if (composerTextarea) {
+      composerTextarea.addEventListener('input', function() {
+        if (this.value.trim().length > 0) {
+          reportChannelTyping();
+        }
+      });
+    }
+
+    function pollChannelTyping() {
+      fetch('/api/typing/status/?room_type=channel&room_id=' + encodeURIComponent(channelSlug))
+        .then(r => r.json())
+        .then(data => {
+          const indicator = document.getElementById('channel-typing-indicator');
+          const textSpan = document.getElementById('channel-typing-text');
+          if (!indicator || !textSpan) return;
+
+          if (data.typing_users && data.typing_users.length > 0) {
+            const names = data.typing_users;
+            let label = '';
+            if (names.length === 1) {
+              label = names[0] + ' is typing...';
+            } else if (names.length === 2) {
+              label = names[0] + ' and ' + names[1] + ' are typing...';
+            } else {
+              label = 'Several people are typing...';
+            }
+            textSpan.textContent = label;
+            indicator.style.display = 'inline-flex';
+          } else {
+            indicator.style.display = 'none';
+          }
+        })
+        .catch(() => {});
+    }
+
+    setInterval(pollChannelTyping, 2000);
+  })();
+</script>
+
 {% endblock %}
+

@@ -174,8 +174,17 @@
         </button>
       </div>
     </form>
-    <div style="font-size:11px; color:#868686; margin-top:4px; display:flex; justify-content:space-between;">
-      <span><strong>Return</strong> to send &bull; <strong>Shift + Return</strong> for new line</span>
+    <div style="font-size:11px; color:#868686; margin-top:4px; display:flex; justify-content:space-between; align-items:center; min-height:18px;">
+      <!-- Slack Typing Indicator Bar -->
+      <div id="slack-typing-indicator" style="display:none; align-items:center; gap:6px; color:#1264A3; font-weight:600; font-size:12px;">
+        <span class="typing-dots-animation">
+          <span class="typing-dot"></span>
+          <span class="typing-dot"></span>
+          <span class="typing-dot"></span>
+        </span>
+        <span id="slack-typing-text"></span>
+      </div>
+      <span style="margin-left:auto;"><strong>Return</strong> to send &bull; <strong>Shift + Return</strong> for new line</span>
     </div>
   </div>
 
@@ -183,6 +192,36 @@
 
 <!-- Styles for DM Link Unfurls and Dark theme message rows -->
 <style>
+  /* Slack Typing Dots Animation */
+  .typing-dots-animation {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    margin-right: 4px;
+  }
+  .typing-dot {
+    width: 5px;
+    height: 5px;
+    background-color: #1264A3;
+    border-radius: 50%;
+    display: inline-block;
+    animation: slackTypingBounce 1.4s infinite ease-in-out both;
+  }
+  .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+  .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+  .typing-dot:nth-child(3) { animation-delay: 0s; }
+
+  @keyframes slackTypingBounce {
+    0%, 80%, 100% {
+      transform: scale(0.6);
+      opacity: 0.4;
+    }
+    40% {
+      transform: scale(1.1);
+      opacity: 1;
+    }
+  }
+
   .dm-message-row:hover {
     background: #222529 !important;
   }
@@ -483,6 +522,66 @@
     })
     .catch(err => alert('Error deleting message: ' + err));
   }
+
+  // Real-time Slack Typing Indicator Listener & Poller
+  const targetUsername = "{{ target_user.username|escapejs }}";
+  let lastReportedTyping = 0;
+
+  function reportUserTyping() {
+    const now = Date.now();
+    if (now - lastReportedTyping < 2000) return; // throttle to once every 2s
+    lastReportedTyping = now;
+
+    const fd = new FormData();
+    fd.append('room_type', 'dm');
+    fd.append('room_id', targetUsername);
+
+    fetch('/api/typing/report/', {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': getCsrfToken(),
+      },
+      body: fd
+    }).catch(() => {});
+  }
+
+  const dmTextarea = document.getElementById('dm-textarea');
+  if (dmTextarea) {
+    dmTextarea.addEventListener('input', function() {
+      if (this.value.trim().length > 0) {
+        reportUserTyping();
+      }
+    });
+  }
+
+  function pollTypingStatus() {
+    fetch('/api/typing/status/?room_type=dm&room_id=' + encodeURIComponent(targetUsername))
+      .then(r => r.json())
+      .then(data => {
+        const indicator = document.getElementById('slack-typing-indicator');
+        const textSpan = document.getElementById('slack-typing-text');
+        if (!indicator || !textSpan) return;
+
+        if (data.typing_users && data.typing_users.length > 0) {
+          const names = data.typing_users;
+          let label = '';
+          if (names.length === 1) {
+            label = names[0] + ' is typing...';
+          } else if (names.length === 2) {
+            label = names[0] + ' and ' + names[1] + ' are typing...';
+          } else {
+            label = 'Several people are typing...';
+          }
+          textSpan.textContent = label;
+          indicator.style.display = 'inline-flex';
+        } else {
+          indicator.style.display = 'none';
+        }
+      })
+      .catch(() => {});
+  }
+
+  setInterval(pollTypingStatus, 2000);
 </script>
 {% endblock %}
 

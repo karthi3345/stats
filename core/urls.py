@@ -51,5 +51,7 @@ urlpatterns = [
     path('dm/messages/<int:message_id>/edit/', views.edit_direct_message, name='edit_direct_message'),
     path('dm/messages/<int:message_id>/delete/', views.delete_direct_message, name='delete_direct_message'),
     path('messages/forward/', views.forward_message, name='forward_message'),
+    path('api/typing/report/', views.report_typing_status, name='report_typing_status'),
+    path('api/typing/status/', views.get_typing_status, name='get_typing_status'),
 ]
 
