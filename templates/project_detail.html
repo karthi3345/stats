@@ -50,7 +50,7 @@
   <button id="btn-tab-confluence" class="channel-tab-btn" onclick="switchChannelView('confluence')">
     <span>📄</span>
     <span>Confluence Weekly Status</span>
-    <span class="tab-pill-badge">{{ project.reports.count }}</span>
+    <span class="tab-pill-badge" id="confluence-tab-badge">{{ confluence_reports_count|default:0 }}</span>
   </button>
   <button id="btn-tab-management" class="channel-tab-btn" onclick="switchChannelView('management')">
     <span>📋</span>

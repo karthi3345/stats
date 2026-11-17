@@ -199,9 +199,12 @@ def project_detail(request, slug):
         if ms.date not in confluence_by_date:
             confluence_by_date[ms.date] = []
 
-    # 2. Fetch existing reports
+    # 2. Fetch existing structured Confluence reports (exclude quick chat messages)
     confluence_qs = DailyReport.objects.filter(project=project)\
+        .exclude(what_done_today='', yesterday_work='', today_plan='')\
         .select_related('author', 'author__profile').order_by('-date', '-id')
+
+    confluence_reports_count = confluence_qs.count()
 
     for r in confluence_qs:
         date_key = r.date
@@ -289,6 +292,7 @@ def project_detail(request, slug):
         'reports_by_date': reports_by_date,
         'days_data': days_data,
         'report_count': reports_qs.count(),
+        'confluence_reports_count': confluence_reports_count,
         'available_users': available_users,
         'form': form,
         'current_user': current_user,
@@ -367,6 +371,7 @@ def project_confluence_view(request, slug):
     project = get_object_or_404(Project.objects.prefetch_related('members', 'members__profile'), slug=slug)
 
     reports_qs = DailyReport.objects.filter(project=project)\
+        .exclude(what_done_today='', yesterday_work='', today_plan='')\
         .select_related('author', 'author__profile').order_by('-date', '-id')
 
     # Group reports by date
