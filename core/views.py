@@ -7,7 +7,8 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from io import BytesIO
 from django.http import JsonResponse, HttpResponse
-from django.db.models import Count
+from django.db import models
+from django.db.models import Count, Q
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
