@@ -10,10 +10,12 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
+import os
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
 
 
 # Quick-start development settings - unsuitable for production
@@ -74,12 +76,29 @@ WSGI_APPLICATION = 'status_project.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
+# On Vercel serverless functions, the root filesystem is read-only (/var/task).
+# Only /tmp is writable.
+if os.environ.get('VERCEL') or '/var/task' in str(BASE_DIR):
+    tmp_db = Path('/tmp/db.sqlite3')
+    source_db = BASE_DIR / 'db.sqlite3'
+    if not tmp_db.exists() and source_db.exists():
+        try:
+            import shutil
+            shutil.copyfile(source_db, tmp_db)
+            os.chmod(tmp_db, 0o666)
+        except Exception:
+            pass
+    db_path = tmp_db
+else:
+    db_path = BASE_DIR / 'db.sqlite3'
+
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'NAME': db_path,
     }
 }
+
 
 
 # Password validation
