@@ -48,11 +48,19 @@ def login_view(request):
             messages.success(request, f"Welcome back to StatusPulse, {user.get_full_name() or user.username}!")
             return redirect('dashboard')
 
-        # Standard username/password login
-        username = request.POST.get('username', '').strip()
+        # Standard username/email login (supports case-insensitive and email)
+        identifier = request.POST.get('username', '').strip()
         password = request.POST.get('password', '').strip()
 
-        user = authenticate(request, username=username, password=password)
+        user = authenticate(request, username=identifier, password=password)
+        if user is None:
+            # Try case-insensitive username match or email match
+            matched_user = User.objects.filter(
+                models.Q(username__iexact=identifier) | models.Q(email__iexact=identifier)
+            ).first()
+            if matched_user:
+                user = authenticate(request, username=matched_user.username, password=password)
+
         if user is not None:
             login(request, user)
             messages.success(request, f"Welcome back, {user.get_full_name() or user.username}!")
@@ -60,6 +68,7 @@ def login_view(request):
             return redirect(next_url)
         else:
             messages.error(request, "Invalid username or password. Please try again.")
+
 
     return render(request, 'login.html', {'demo_users': demo_users})
 
