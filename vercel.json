@@ -1,1 +1,19 @@
-{\n  " builds\: [\n {\n \src\: \status_project/wsgi.py\,\n \use\: \@vercel/python\,\n \config\: { \maxLambdaSize\: \15mb\, \runtime\: \python3.12\ }\n }\n ],\n \routes\: [\n {\n \src\: \/  \,\n \dest\: \status_project/wsgi.py\\n }\n ]\n}\n
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "status_project/wsgi.py",
+      "use": "@vercel/python",
+      "config": {
+        "maxLambdaSize": "15mb",
+        "runtime": "python3.12"
+      }
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "status_project/wsgi.py"
+    }
+  ]
+}
