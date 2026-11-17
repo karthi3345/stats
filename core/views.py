@@ -84,13 +84,26 @@ def register_view(request):
         email = request.POST.get('email', '').strip()
         role = request.POST.get('role', 'Software Engineer').strip()
         password = request.POST.get('password', '').strip()
+        confirm_password = request.POST.get('confirm_password', '').strip()
 
         if not username or not password:
             messages.error(request, "Username and password are required.")
             return render(request, 'register.html')
 
+        if len(password) < 6:
+            messages.error(request, "Password must be at least 6 characters.")
+            return render(request, 'register.html')
+
+        if confirm_password and password != confirm_password:
+            messages.error(request, "Passwords do not match.")
+            return render(request, 'register.html')
+
         if User.objects.filter(username=username).exists():
             messages.error(request, f"Username @{username} is already taken.")
+            return render(request, 'register.html')
+
+        if email and User.objects.filter(email__iexact=email).exists():
+            messages.error(request, f"Email {email} is already registered.")
             return render(request, 'register.html')
 
         # Parse first and last name
@@ -516,7 +529,17 @@ def add_project_members(request, slug):
 @login_required(login_url='login')
 def remove_project_member(request, slug, user_id):
     project = get_object_or_404(Project, slug=slug)
+    # Check if requester is the channel creator/owner or superuser/staff
+    is_owner = (project.created_by == request.user) or (project.created_by is None) or request.user.is_staff
+    if not is_owner:
+        messages.error(request, f"Only the channel owner (@{project.created_by.username if project.created_by else 'Admin'}) can remove members from #{project.name}.")
+        return redirect('project_detail', slug=slug)
+
     user_to_remove = get_object_or_404(User, id=user_id)
+    if user_to_remove == project.created_by and not request.user.is_staff:
+        messages.error(request, "The channel owner cannot be removed from their own channel.")
+        return redirect('project_detail', slug=slug)
+
     project.members.remove(user_to_remove)
     messages.info(request, f"Removed {user_to_remove.get_full_name() or user_to_remove.username} from #{project.name}.")
     return redirect('project_detail', slug=slug)
@@ -1984,20 +2007,6 @@ def direct_message_view(request, username):
             (models.Q(sender=current_user, recipient=target_user) |
              models.Q(sender=target_user, recipient=current_user))
         ).order_by('created_at')
-
-    # Seed demo messages matching screenshot if empty for Karthik Raja / current user
-    if not dms_qs.exists() and current_user.username == target_user.username:
-        d1 = DirectMessage.objects.create(
-            sender=current_user,
-            recipient=current_user,
-            content="login.html\nhttps://gambling.com/betbuilderai",
-        )
-        d2 = DirectMessage.objects.create(
-            sender=current_user,
-            recipient=current_user,
-            content="https://viralmaxxing.kungumavishnu.com/%40kungumavishnu/job?utm_source=sp_auto_dm&utm_referrer=sp_auto_dm",
-        )
-        dms_qs = DirectMessage.objects.filter(sender=current_user, recipient=current_user).order_by('created_at')
 
     # Group messages by date
     dms_by_date = {}

@@ -1335,22 +1335,27 @@ function saveConfluenceHeader(e) {
                   {{ m.profile.initials|default:m.username|slice:":2"|upper }}
                 </div>
                 <div>
-                  <div style="font-size: 13px; font-weight: 700; color: #172B4D;">
-                    {{ m.get_full_name|default:m.username }}
+                  <div style="font-size: 13px; font-weight: 700; color: #172B4D; display: flex; align-items: center; gap: 6px;">
+                    <span>{{ m.get_full_name|default:m.username }}</span>
+                    {% if m == project.created_by %}
+                      <span style="font-size: 10px; background: #EAE6FF; color: #403294; font-weight: 800; padding: 1px 6px; border-radius: 4px; text-transform: uppercase;">👑 Owner</span>
+                    {% endif %}
                     {% if m == current_user %}<span style="font-size: 11px; color: #0052CC; font-weight: 600;">(you)</span>{% endif %}
                   </div>
                   <div style="font-size: 11px; color: #6B778C;">@{{ m.username }} &bull; {{ m.profile.role|default:'Member' }}</div>
                 </div>
               </div>
 
-              <!-- Remove button -->
-              {% if project_members.count > 1 %}
-                <form action="{% url 'remove_project_member' project.slug m.id %}" method="POST" style="margin: 0;" onsubmit="return confirm('Remove @{{ m.username }} from #{{ project.name }}?');">
-                  {% csrf_token %}
-                  <button type="submit" style="background: transparent; border: 1px solid #FFEBE6; color: #DE350B; border-radius: 6px; padding: 3px 8px; font-size: 11px; font-weight: 600; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='#FFEBE6'; this.style.borderColor='#FFBDAD';" onmouseout="this.style.background='transparent'; this.style.borderColor='#FFEBE6';">
-                    Remove &times;
-                  </button>
-                </form>
+              <!-- Remove button (Only channel owner or staff can remove, and cannot remove owner) -->
+              {% if project_members.count > 1 and m != project.created_by %}
+                {% if project.created_by == current_user or not project.created_by or current_user.is_staff %}
+                  <form action="{% url 'remove_project_member' project.slug m.id %}" method="POST" style="margin: 0;" onsubmit="return confirm('Remove @{{ m.username }} from #{{ project.name }}?');">
+                    {% csrf_token %}
+                    <button type="submit" style="background: transparent; border: 1px solid #FFEBE6; color: #DE350B; border-radius: 6px; padding: 3px 8px; font-size: 11px; font-weight: 600; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='#FFEBE6'; this.style.borderColor='#FFBDAD';" onmouseout="this.style.background='transparent'; this.style.borderColor='#FFEBE6';" title="Remove from channel">
+                      Remove &times;
+                    </button>
+                  </form>
+                {% endif %}
               {% endif %}
             </div>
           {% endfor %}

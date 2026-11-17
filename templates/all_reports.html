@@ -161,15 +161,20 @@
     {% endfor %}
   {% else %}
     <div style="text-align:center; padding:70px 20px; color:#616061;">
-      <div style="font-size:48px; margin-bottom:12px;">🔍</div>
-      <h2 style="font-size:20px; font-weight:900; color:#1D1C1D; margin-bottom:6px;">No reports found</h2>
-      <p style="font-size:14px; max-width:440px; margin:0 auto 16px;">
+      <div style="font-size:48px; margin-bottom:12px;">💬</div>
+      <h2 style="font-size:22px; font-weight:900; color:#1D1C1D; margin-bottom:8px;">Welcome to StatusPulse!</h2>
+      <p style="font-size:14.5px; max-width:480px; margin:0 auto 20px; line-height:1.5;">
         {% if tagged_me %}
           You have not been tagged in any status updates yet. Teammates can tag you using <code>@{{ current_user.username }}</code>!
         {% else %}
-          No daily updates match your current filter.
+          Your workspace is clean and ready. Create a channel to start collaborating and sharing daily updates with your team.
         {% endif %}
       </p>
+      {% if not tagged_me %}
+        <button type="button" class="slack-btn slack-btn-primary" data-open-modal="create-project-modal" style="font-size:14px; padding:8px 20px; border-radius:6px; cursor:pointer;">
+          + Create Channel
+        </button>
+      {% endif %}
     </div>
   {% endif %}
 

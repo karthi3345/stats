@@ -184,6 +184,38 @@
       font-weight: 800;
     }
 
+    .password-input-wrapper {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+    .password-input-wrapper .auth-input {
+      padding-right: 42px;
+    }
+    .password-toggle-btn {
+      position: absolute;
+      right: 10px;
+      background: none;
+      border: none;
+      color: #616061;
+      cursor: pointer;
+      font-size: 16px;
+      padding: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: color 0.15s ease;
+    }
+    .password-toggle-btn:hover {
+      color: #1D1C1D;
+    }
+    .field-validation-error {
+      font-size: 12px;
+      color: #E01E5A;
+      margin-top: 4px;
+      display: none;
+    }
+
     .auth-footer-links {
       text-align: center;
       font-size: 14px;
@@ -216,23 +248,30 @@
     <div class="auth-brand-header">
       <div class="auth-logo-badge">⚡</div>
       <h1>Sign in to StatusPulse</h1>
-      <p>Log in with your company credentials or choose a team profile below to start posting daily status reports.</p>
+      <p>Log in with your company credentials to start posting daily status reports.</p>
     </div>
 
     <!-- Main Login Card -->
     <div class="auth-card">
-      <form action="{% url 'login' %}" method="POST">
+      <form action="{% url 'login' %}" method="POST" id="login-form" novalidate onsubmit="return validateLoginForm(event)">
         {% csrf_token %}
         <div class="auth-form-group">
           <label for="username">Username or Email</label>
           <input type="text" id="username" name="username" class="auth-input" placeholder="Enter your username or email" required autofocus>
+          <div id="username-error" class="field-validation-error">Please enter your username or email.</div>
         </div>
 
         <div class="auth-form-group">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
             <label for="password" style="margin-bottom:0;">Password</label>
           </div>
-          <input type="password" id="password" name="password" class="auth-input" placeholder="Enter your password" required>
+          <div class="password-input-wrapper">
+            <input type="password" id="password" name="password" class="auth-input" placeholder="Enter your password" required>
+            <button type="button" class="password-toggle-btn" onclick="togglePasswordVisibility('password', this)" title="Show/Hide password" aria-label="Toggle password visibility">
+              👁️
+            </button>
+          </div>
+          <div id="password-error" class="field-validation-error">Please enter your password.</div>
         </div>
 
         <button type="submit" class="auth-submit-btn">
@@ -249,5 +288,50 @@
 
   </div>
 
+  <script>
+    function togglePasswordVisibility(fieldId, btn) {
+      const field = document.getElementById(fieldId);
+      if (field.type === 'password') {
+        field.type = 'text';
+        btn.textContent = '🙈';
+        btn.title = 'Hide password';
+      } else {
+        field.type = 'password';
+        btn.textContent = '👁️';
+        btn.title = 'Show password';
+      }
+    }
+
+    function validateLoginForm(e) {
+      let isValid = true;
+      const usernameInput = document.getElementById('username');
+      const passwordInput = document.getElementById('password');
+      const usernameError = document.getElementById('username-error');
+      const passwordError = document.getElementById('password-error');
+
+      if (!usernameInput.value.trim()) {
+        usernameError.style.display = 'block';
+        usernameInput.style.borderColor = '#E01E5A';
+        isValid = false;
+      } else {
+        usernameError.style.display = 'none';
+        usernameInput.style.borderColor = '#BBBBBB';
+      }
+
+      if (!passwordInput.value) {
+        passwordError.style.display = 'block';
+        passwordInput.style.borderColor = '#E01E5A';
+        isValid = false;
+      } else {
+        passwordError.style.display = 'none';
+        passwordInput.style.borderColor = '#BBBBBB';
+      }
+
+      if (!isValid) {
+        e.preventDefault();
+      }
+      return isValid;
+    }
+  </script>
 </body>
 </html>
