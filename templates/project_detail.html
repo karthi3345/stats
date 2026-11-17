@@ -225,7 +225,7 @@
 
   <!-- Bottom Slack Chat Composer -->
   <div class="slack-bottom-composer-wrapper">
-    <form action="{% url 'submit_report' project.slug %}" method="POST" class="slack-rich-composer">
+    <form action="{% url 'submit_report' project.slug %}" method="POST" id="channel-chat-form" class="slack-rich-composer" onsubmit="event.preventDefault(); submitChannelMsgViaAjax();">
       {% csrf_token %}
       
       <!-- Top Formatting Toolbar -->
@@ -243,7 +243,7 @@
       <!-- Quick Message Textarea -->
       <div style="padding: 10px 14px 4px 14px;">
         <textarea name="content" id="chat-composer-textarea" class="slack-dsr-textarea mention-input"
-          onkeydown="if(event.key==='Enter' && !event.shiftKey){ event.preventDefault(); if(this.value.trim()){ this.form.submit(); } }"
+          onkeydown="if(event.key==='Enter' && !event.shiftKey){ event.preventDefault(); submitChannelMsgViaAjax(); }"
           style="min-height:68px; border:none; resize:none; font-size:14px; width:100%; outline:none;"
           placeholder="Message #{{ project.name }}... (Press Enter to send, Shift+Enter for new line)" required></textarea>
       </div>
@@ -3789,7 +3789,88 @@ function saveEditedReport(e) {
         .catch(() => {});
     }
 
+    let highestReportId = 0;
+    document.querySelectorAll('[id^="msg-content-wrapper-"]').forEach(el => {
+      const id = parseInt(el.id.replace('msg-content-wrapper-', ''));
+      if (id > highestReportId) highestReportId = id;
+    });
+
+    window.submitChannelMsgViaAjax = function() {
+      const textarea = document.getElementById('chat-composer-textarea');
+      if (!textarea) return;
+      const content = textarea.value.trim();
+      if (!content) return;
+
+      textarea.value = '';
+      textarea.style.height = 'auto';
+
+      const fd = new FormData();
+      fd.append('content', content);
+
+      fetch('{% url "submit_report" project.slug %}', {
+        method: 'POST',
+        headers: {
+          'X-CSRFToken': getCsrfToken(),
+          'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: fd
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.status === 'ok') {
+          appendChannelMessageRow(data, true);
+          if (data.id > highestReportId) highestReportId = data.id;
+        }
+      })
+      .catch(() => {});
+    };
+
+    function appendChannelMessageRow(data, scroll) {
+      if (document.getElementById('msg-content-wrapper-' + data.id)) return;
+
+      const container = document.getElementById('feed-stream-container') || document.querySelector('.feed-timeline-stream');
+      if (!container) return;
+
+      const row = document.createElement('div');
+      row.className = 'slack-msg-row';
+      row.innerHTML = `
+        <div class="slack-avatar-square" style="width:36px;height:36px;font-size:13px;border-radius:6px;background:${data.author_color || '#1264A3'};">
+          ${escapeHtml(data.author_initials || 'U')}
+        </div>
+        <div class="msg-main-content" id="msg-content-wrapper-${data.id}">
+          <div class="msg-meta-line">
+            <span class="msg-sender-name">${escapeHtml(data.author)}</span>
+            <span class="msg-sender-title">@${escapeHtml(data.author_username)} &bull; ${escapeHtml(data.author_role || 'Member')}</span>
+            <span class="msg-timestamp">${data.time || 'just now'}</span>
+          </div>
+          <div id="msg-display-text-${data.id}" style="font-size:14px; line-height:1.5; color:#1D1C1D; margin-top:2px;">
+            ${data.html}
+          </div>
+        </div>
+      `;
+
+      container.appendChild(row);
+      if (scroll) {
+        container.scrollTop = container.scrollHeight;
+      }
+    }
+
+    function pollLatestChannelMessages() {
+      fetch('/api/messages/latest/?room_type=channel&room_id=' + encodeURIComponent(channelSlug) + '&after_id=' + highestReportId)
+        .then(r => r.json())
+        .then(data => {
+          if (data.messages && data.messages.length > 0) {
+            data.messages.forEach(msg => {
+              appendChannelMessageRow(msg, true);
+              if (msg.id > highestReportId) highestReportId = msg.id;
+            });
+          }
+        })
+        .catch(() => {});
+    }
+
     setInterval(pollChannelTyping, 2000);
+    setInterval(pollLatestChannelMessages, 2000);
   })();
 </script>
 

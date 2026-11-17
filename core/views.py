@@ -468,8 +468,25 @@ def submit_report(request, slug):
         if not project.members.filter(id=current_user.id).exists():
             project.members.add(current_user)
 
+        if request.headers.get('x-requested-with') == 'XMLHttpRequest' or 'application/json' in request.headers.get('Accept', ''):
+            return JsonResponse({
+                'status': 'ok',
+                'id': report.id,
+                'author': report.author.get_full_name() or report.author.username,
+                'author_username': report.author.username,
+                'author_role': report.author.profile.role if hasattr(report.author, 'profile') else 'Member',
+                'author_initials': report.author.profile.initials if hasattr(report.author, 'profile') else report.author.username[:2].upper(),
+                'author_color': report.author.profile.avatar_color if hasattr(report.author, 'profile') else '#1264A3',
+                'content': report.content,
+                'html': report.message_html,
+                'time': report.created_at.strftime('%I:%M %p').lstrip('0'),
+            })
+
         messages.success(request, f"Message sent in #{project.name}!")
         return redirect('project_detail', slug=slug)
+
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest' or 'application/json' in request.headers.get('Accept', ''):
+        return JsonResponse({'error': 'Please enter a message.'}, status=400)
 
     messages.error(request, "Please enter your progress report or message.")
     return redirect('project_detail', slug=slug)
@@ -2033,12 +2050,28 @@ def send_direct_message(request, username):
     content = request.POST.get('content', '').strip()
 
     if content:
-        DirectMessage.objects.create(
+        dm = DirectMessage.objects.create(
             sender=request.user,
             recipient=target_user,
             content=content
         )
+        if request.headers.get('x-requested-with') == 'XMLHttpRequest' or 'application/json' in request.headers.get('Accept', ''):
+            return JsonResponse({
+                'status': 'ok',
+                'id': dm.id,
+                'sender': dm.sender.get_full_name() or dm.sender.username,
+                'sender_username': dm.sender.username,
+                'sender_initials': dm.sender.profile.initials if hasattr(dm.sender, 'profile') else dm.sender.username[:2].upper(),
+                'sender_color': dm.sender.profile.avatar_color if hasattr(dm.sender, 'profile') else '#1264A3',
+                'content': dm.content,
+                'html': dm.formatted_content_html,
+                'time': dm.created_at.strftime('%H:%M'),
+            })
+
         messages.success(request, "Message sent.")
+
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest' or 'application/json' in request.headers.get('Accept', ''):
+        return JsonResponse({'error': 'Message cannot be empty.'}, status=400)
 
     return redirect('direct_messages', username=username)
 
@@ -2190,5 +2223,59 @@ def get_typing_status(request):
 
     cache.set(cache_key, updated_dict, timeout=10)
     return JsonResponse({'typing_users': active_typers})
+
+
+@login_required(login_url='login')
+def fetch_latest_messages(request):
+    """Fetches messages sent after last_id for 2-second live refresh without reloading page"""
+    room_type = request.GET.get('room_type', 'channel')
+    room_id = request.GET.get('room_id', '').strip()
+    after_id = int(request.GET.get('after_id', 0))
+
+    new_items = []
+
+    if room_type == 'dm':
+        target_user = get_object_or_404(User, username=room_id)
+        current_user = request.user
+        qs = DirectMessage.objects.filter(
+            id__gt=after_id
+        ).filter(
+            (models.Q(sender=current_user, recipient=target_user) |
+             models.Q(sender=target_user, recipient=current_user))
+        ).select_related('sender', 'sender__profile').order_by('id')[:20]
+
+        for m in qs:
+            new_items.append({
+                'id': m.id,
+                'sender': m.sender.get_full_name() or m.sender.username,
+                'sender_username': m.sender.username,
+                'sender_initials': m.sender.profile.initials if hasattr(m.sender, 'profile') else m.sender.username[:2].upper(),
+                'sender_color': m.sender.profile.avatar_color if hasattr(m.sender, 'profile') else '#1264A3',
+                'html': m.formatted_content_html,
+                'time': m.created_at.strftime('%H:%M'),
+                'is_current_user': (m.sender == current_user)
+            })
+    else:
+        project = get_object_or_404(Project, slug=room_id)
+        qs = DailyReport.objects.filter(
+            project=project,
+            id__gt=after_id
+        ).select_related('author', 'author__profile').order_by('id')[:20]
+
+        for r in qs:
+            new_items.append({
+                'id': r.id,
+                'author': r.author.get_full_name() or r.author.username,
+                'author_username': r.author.username,
+                'author_role': r.author.profile.role if hasattr(r.author, 'profile') else 'Member',
+                'author_initials': r.author.profile.initials if hasattr(r.author, 'profile') else r.author.username[:2].upper(),
+                'author_color': r.author.profile.avatar_color if hasattr(r.author, 'profile') else '#1264A3',
+                'html': r.message_html,
+                'time': r.created_at.strftime('%I:%M %p').lstrip('0'),
+                'is_current_user': (r.author == request.user)
+            })
+
+    return JsonResponse({'messages': new_items})
+
 
 

@@ -53,5 +53,6 @@ urlpatterns = [
     path('messages/forward/', views.forward_message, name='forward_message'),
     path('api/typing/report/', views.report_typing_status, name='report_typing_status'),
     path('api/typing/status/', views.get_typing_status, name='get_typing_status'),
+    path('api/messages/latest/', views.fetch_latest_messages, name='fetch_latest_messages'),
 ]
 
