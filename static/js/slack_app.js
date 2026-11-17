@@ -1192,36 +1192,14 @@ window.toggleForwardDest = function(val) {
   }
 };
 
-// 13. Dark & Night / Light Mode Theme Controller
-window.toggleThemeMode = function() {
-  const isDark = document.body.classList.toggle('dark-mode');
-  const icon = document.getElementById('theme-toggle-icon');
-  const sidebarIcon = document.getElementById('sidebar-theme-icon');
-
-  if (isDark) {
-    if (icon) icon.textContent = '☀️';
-    if (sidebarIcon) sidebarIcon.textContent = '☀️ Light';
-    localStorage.setItem('statuspulse_theme', 'dark');
-  } else {
-    if (icon) icon.textContent = '🌙';
-    if (sidebarIcon) sidebarIcon.textContent = '🌙 Dark';
-    localStorage.setItem('statuspulse_theme', 'light');
-  }
-};
-
-// Initialize saved theme on page load
+// Default Clean Theme: Light mode only
 (function() {
-  const saved = localStorage.getItem('statuspulse_theme');
-  if (saved === 'dark' || (!saved && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-    document.body.classList.add('dark-mode');
-    document.addEventListener('DOMContentLoaded', function() {
-      const icon = document.getElementById('theme-toggle-icon');
-      const sidebarIcon = document.getElementById('sidebar-theme-icon');
-      if (icon) icon.textContent = '☀️';
-      if (sidebarIcon) sidebarIcon.textContent = '☀️ Light';
-    });
-  }
+  try {
+    localStorage.removeItem('statuspulse_theme');
+    document.body.classList.remove('dark-mode');
+  } catch (e) {}
 })();
+
 
 
 
